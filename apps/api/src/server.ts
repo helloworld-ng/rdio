@@ -1,5 +1,5 @@
 import Fastify from 'fastify'
-import { findStation, getStationScheduleSnapshot, listStations, type RadioStation } from '@rdio/rdio-core'
+import { findStation, getStationScheduleSnapshot, type RadioStation } from '@rdio/rdio-core'
 import { defaultStationId, stations } from './stations'
 
 const server = Fastify({ logger: true })
@@ -68,22 +68,6 @@ server.get('/station', async () => ({
 }))
 
 server.get('/schedule', async () => scheduleResponse(defaultStation()))
-
-server.get('/stations', async () => ({
-  stations: listStations(stations).map(stationSummary),
-}))
-
-server.get<{ Params: { stationId: string } }>('/stations/:stationId', async (request) => ({
-  station: stationSummary(requireStation(request.params.stationId)),
-}))
-
-server.get<{ Params: { stationId: string } }>('/stations/:stationId/schedule', async (request) => {
-  return scheduleResponse(requireStation(request.params.stationId))
-})
-
-server.get<{ Params: { stationId: string } }>('/stations/:stationId/now-playing', async (request) => {
-  return nowPlayingResponse(requireStation(request.params.stationId))
-})
 
 server.get('/now-playing', async () => nowPlayingResponse(defaultStation()))
 

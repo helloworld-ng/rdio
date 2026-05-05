@@ -88,13 +88,6 @@ The primary API is single-station:
 - `GET /schedule` returns station metadata, all configured programs, current program, upcoming programs, and conflicts
 - `GET /now-playing` returns the public stream URL and current playout source
 
-Compatibility routes still exist for older clients:
-
-- `GET /stations`
-- `GET /stations/:stationId`
-- `GET /stations/:stationId/schedule`
-- `GET /stations/:stationId/now-playing`
-
 `GET /schedule` returns:
 
 ```json
