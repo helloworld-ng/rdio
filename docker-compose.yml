@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: rdio
+      POSTGRES_USER: rdio
+      POSTGRES_PASSWORD: rdio
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  icecast:
+    image: moul/icecast
+    environment:
+      ICECAST_SOURCE_PASSWORD: sourcepass
+      ICECAST_ADMIN_PASSWORD: adminpass
+      ICECAST_RELAY_PASSWORD: relaypass
+      ICECAST_HOSTNAME: localhost
+    ports:
+      - "8000:8000"
+
+  liquidsoap:
+    image: savonet/liquidsoap:v2.2.5
+    depends_on:
+      - icecast
+    volumes:
+      - ./services/liquidsoap:/rdio:ro
+      - ./media:/media:ro
+    command: liquidsoap /rdio/station.liq
+
+volumes:
+  postgres_data:

@@ -1,0 +1,8 @@
+node_modules
+dist
+.turbo
+.env
+.env.local
+media/uploads
+*.log
+DS_Store
