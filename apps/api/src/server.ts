@@ -30,7 +30,44 @@ function requireStation(stationId: string) {
   return station
 }
 
+function defaultStation() {
+  return requireStation(defaultStationId)
+}
+
+function scheduleResponse(station: RadioStation) {
+  const snapshot = getStationScheduleSnapshot(station, new Date())
+
+  return {
+    station: stationSummary(station),
+    generatedAt: snapshot.generatedAt,
+    programs: station.schedule,
+    currentProgram: snapshot.currentProgram,
+    upcomingPrograms: snapshot.upcomingPrograms,
+    conflicts: snapshot.conflicts,
+  }
+}
+
+function nowPlayingResponse(station: RadioStation) {
+  const snapshot = getStationScheduleSnapshot(station, new Date(), { upcomingLimit: 3 })
+
+  return {
+    station: stationSummary(station),
+    mount: station.mount,
+    streamUrl: station.streamUrl,
+    currentProgram: snapshot.currentProgram,
+    upcomingPrograms: snapshot.upcomingPrograms,
+    source: snapshot.currentProgram?.source ?? station.fallbackSource,
+    generatedAt: snapshot.generatedAt,
+  }
+}
+
 server.get('/health', async () => ({ ok: true, service: 'rdio-api' }))
+
+server.get('/station', async () => ({
+  station: stationSummary(defaultStation()),
+}))
+
+server.get('/schedule', async () => scheduleResponse(defaultStation()))
 
 server.get('/stations', async () => ({
   stations: listStations(stations).map(stationSummary),
@@ -41,46 +78,14 @@ server.get<{ Params: { stationId: string } }>('/stations/:stationId', async (req
 }))
 
 server.get<{ Params: { stationId: string } }>('/stations/:stationId/schedule', async (request) => {
-  const station = requireStation(request.params.stationId)
-  const snapshot = getStationScheduleSnapshot(station, new Date())
-
-  return {
-    station: stationSummary(station),
-    schedule: station.schedule,
-    ...snapshot,
-  }
+  return scheduleResponse(requireStation(request.params.stationId))
 })
 
 server.get<{ Params: { stationId: string } }>('/stations/:stationId/now-playing', async (request) => {
-  const station = requireStation(request.params.stationId)
-  const snapshot = getStationScheduleSnapshot(station, new Date(), { upcomingLimit: 3 })
-
-  return {
-    station: stationSummary(station),
-    mount: station.mount,
-    streamUrl: station.streamUrl,
-    currentProgram: snapshot.currentProgram,
-    upcomingPrograms: snapshot.upcomingPrograms,
-    source: snapshot.currentProgram?.source ?? station.fallbackSource,
-    generatedAt: snapshot.generatedAt,
-  }
+  return nowPlayingResponse(requireStation(request.params.stationId))
 })
 
-server.get('/now-playing', async () => {
-  const station = requireStation(defaultStationId)
-  const snapshot = getStationScheduleSnapshot(station, new Date(), { upcomingLimit: 3 })
-
-  return {
-    station: stationSummary(station),
-    stationId: station.id,
-    mount: station.mount,
-    streamUrl: station.streamUrl,
-    currentProgram: snapshot.currentProgram,
-    upcomingPrograms: snapshot.upcomingPrograms,
-    source: snapshot.currentProgram?.source ?? station.fallbackSource,
-    generatedAt: snapshot.generatedAt,
-  }
-})
+server.get('/now-playing', async () => nowPlayingResponse(defaultStation()))
 
 const port = Number(process.env.API_PORT ?? 3001)
 await server.listen({ port, host: '0.0.0.0' })

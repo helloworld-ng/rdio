@@ -29,8 +29,8 @@ interface StationSummary {
   fallbackSource: FallbackSource
 }
 
-interface StationsResponse {
-  stations: StationSummary[]
+interface StationResponse {
+  station: StationSummary
 }
 
 interface ProgramBlock {
@@ -106,18 +106,18 @@ function App() {
   useEffect(() => {
     let ignore = false
 
-    async function loadStations() {
+    async function loadStation() {
       try {
-        const response = await fetch(`${apiBaseUrl}/stations`)
+        const response = await fetch(`${apiBaseUrl}/station`)
 
         if (!response.ok) {
-          throw new Error(`Stations request failed with ${response.status}`)
+          throw new Error(`Station request failed with ${response.status}`)
         }
 
-        const data = (await response.json()) as StationsResponse
+        const data = (await response.json()) as StationResponse
 
         if (!ignore) {
-          setStations(data.stations)
+          setStations([data.station])
         }
       } catch {
         if (!ignore) {
@@ -126,7 +126,7 @@ function App() {
       }
     }
 
-    void loadStations()
+    void loadStation()
 
     return () => {
       ignore = true
