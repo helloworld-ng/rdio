@@ -2281,9 +2281,22 @@ button {
   outline: 0;
 }
 
-.shell:has(.empty-page) {
-  display: grid;
-  min-height: 100%;
+.app-shell.is-station-loading .page-header {
+  border-bottom: 0;
+}
+
+.app-shell.is-station-loading .app-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.app-shell.is-station-loading .shell {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  min-height: 0;
   overflow: hidden;
   padding: 0;
 }
@@ -2292,9 +2305,11 @@ button {
   align-items: center;
   background: var(--color-paper);
   color: var(--color-muted);
-  display: grid;
-  min-height: 100%;
-  place-items: center;
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  min-height: 0;
+  width: 100%;
 }
 
 .empty-page p {

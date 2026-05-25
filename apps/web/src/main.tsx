@@ -727,7 +727,10 @@ function App() {
 
   return (
     <main className="app-page">
-      <section className="app-shell" aria-label="Rdio scheduler">
+      <section
+        className={currentStation ? 'app-shell' : 'app-shell is-station-loading'}
+        aria-label="Rdio scheduler"
+      >
         <PageHeader
           alignWithSidebar={isSidebarVisible && currentStation !== null && !isMobileSidebar}
           isSidebarOpen={isSidebarVisible}
@@ -908,7 +911,7 @@ function AppSidebar({
         <SidebarButton active={activeView === 'settings'} icon={Settings} label="Settings" onClick={() => onChangeView('settings')} />
       </nav>
       <div className="sidebar-footer">
-        <span className="sidebar-station-name">{stationName}</span>
+        <span className="sidebar-station-name">hello world</span>
         <span className="sidebar-copyright">© {new Date().getFullYear()}</span>
       </div>
     </aside>
