@@ -2313,10 +2313,10 @@ button {
 }
 
 .empty-page p {
-  font-size: 28px;
+  font-size: 13px;
   font-weight: 300;
-  line-height: 34px;
   margin: 0;
+  text-align: center;
 }
 
 .player-bar {
