@@ -40,6 +40,5 @@ output.icecast(
   mount = "/rdio.mp3",
   name = "rdio",
   description = "Open-source rdio automation",
-  transport = http.transport.ssl,
   rdio
 )
