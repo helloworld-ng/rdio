@@ -1,23 +1,38 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { FallbackSource } from '@rdio/rdio-core'
 import {
-  Bell,
+  BookOpen,
+  CalendarClock,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Copy,
   GripVertical,
   ListMusic,
+  Mic2,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
-  Search,
+  Radio,
   Settings,
-  UploadCloud,
+  Trash2,
   Users,
+  X,
 } from 'lucide-react'
+import { FileUploadField } from './components/FileUploadField'
+import { MediaSlotField } from './components/MediaSlotField'
+import { MediaPreviewThumb } from './components/MediaPreviewThumb'
+import { HostAvatar, hostPalette } from './components/HostAvatar'
+import type { HostRecord } from './components/HostsPage'
+import { HostsPage } from './components/HostsPage'
+import { MultiSelect } from './components/MultiSelect'
 import { PlayerBar } from './components/PlayerBar'
+import { mockAnchorDate, mockBlocks, mockHosts, mockPrograms } from './data/mockStation'
 import './styles.css'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001'
+const hours = Array.from({ length: 24 }, (_, hour) => hour)
 
 interface StationSummary {
   id: string
@@ -33,24 +48,83 @@ interface StationResponse {
   station: StationSummary
 }
 
-interface ProgramBlock {
+interface UploadedFileSummary {
+  name: string
+  size: number
+}
+
+interface MediaItem {
+  id: string
+  name: string
+  size: number
+  type: 'audio' | 'image'
+  uploadedAt: string
+  url: string
+}
+
+interface MediaResponse {
+  media: MediaItem[]
+}
+
+interface Program {
   id: string
   title: string
+  description: string
+  host: string
 }
 
-type ViewName = 'calendar' | 'programs' | 'hosts' | 'media' | 'settings'
-
-function formatMonthLabel(date: Date) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'long',
-    year: 'numeric',
-  }).format(date)
+interface ScheduleBlock {
+  id: string
+  kind: 'media' | 'broadcast'
+  title: string
+  description: string
+  dateKey: string
+  startMinutes: number
+  endMinutes: number
+  hosts: string[]
+  programId?: string
+  file?: UploadedFileSummary
+  mediaId?: string
 }
 
-function formatWeekday(date: Date) {
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: 'long',
-  }).format(date)
+type ScheduleBlockDraft = Omit<ScheduleBlock, 'id' | 'dateKey'>
+
+interface CreationRequest {
+  dateKey: string
+  hour: number
+  kind: ScheduleBlock['kind'] | null
+}
+
+type ViewName = 'schedule' | 'programs' | 'hosts' | 'media' | 'broadcast' | 'settings'
+
+const MOBILE_SIDEBAR_QUERY = '(max-width: 620px)'
+
+function readInitialSidebarVisible() {
+  if (typeof window === 'undefined') {
+    return true
+  }
+
+  return !window.matchMedia(MOBILE_SIDEBAR_QUERY).matches
+}
+
+function getHostNames(hosts: HostRecord[]): string[] {
+  return hosts.map((host) => host.name)
+}
+
+function findHost(hosts: HostRecord[], name: string): HostRecord | undefined {
+  return hosts.find((host) => host.name === name)
+}
+
+function addHostByName(hosts: HostRecord[], name: string): HostRecord[] {
+  const normalized = name.trim()
+
+  if (!normalized || hosts.some((host) => host.name === normalized)) {
+    return hosts
+  }
+
+  const colorId = hostPalette[hosts.length % hostPalette.length].id
+
+  return [...hosts, { name: normalized, colorId }]
 }
 
 function formatDateKey(date: Date) {
@@ -61,47 +135,195 @@ function formatDateKey(date: Date) {
   return `${year}-${month}-${day}`
 }
 
-function formatDayLabel(date: Date) {
+function dateFromKey(dateKey: string) {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
+function formatDayTitle(date: Date) {
   return new Intl.DateTimeFormat(undefined, {
+    weekday: 'long',
     month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date)
+}
+
+function formatShortDate(date: Date) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
     day: 'numeric',
   }).format(date)
 }
 
-function buildMonthDays(date: Date) {
-  const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
+function formatMonthLabel(date: Date) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'long',
+    year: 'numeric',
+  }).format(date)
+}
 
-  return Array.from({ length: daysInMonth }, (_, index) => new Date(date.getFullYear(), date.getMonth(), index + 1))
+function formatHour(hour: number) {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+  }).format(new Date(2026, 0, 1, hour))
+}
+
+function formatClockTime(minutes: number) {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(2026, 0, 1, 0, minutes))
+}
+
+function minutesToTimeInput(minutes: number) {
+  const safeMinutes = Math.min(1439, Math.max(0, minutes))
+  const hour = Math.floor(safeMinutes / 60)
+  const minute = safeMinutes % 60
+
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
+function timeInputToMinutes(value: string) {
+  const [hour = '0', minute = '0'] = value.split(':')
+
+  return Number(hour) * 60 + Number(minute)
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024 * 1024) {
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`
+  }
+
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function formatUploadTime(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(value))
+}
+
+function addDays(date: Date, offset: number) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + offset)
+}
+
+function clampHour(hour: number) {
+  return Math.min(23, Math.max(0, hour))
+}
+
+function isSameCalendarDay(left: Date, right: Date) {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  )
+}
+
+function formatNowClock(date = new Date()) {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(date)
+}
+
+function getNowMinutes(date = new Date()) {
+  return date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60
+}
+
+function getMinutesOffsetInGrid(grid: HTMLElement, minutes: number) {
+  const hour = Math.min(23, Math.floor(minutes / 60))
+  const row = grid.querySelector<HTMLElement>(`.hour-row[data-hour="${hour}"]`)
+
+  if (!row) {
+    return 0
+  }
+
+  const nextRow = grid.querySelector<HTMLElement>(`.hour-row[data-hour="${hour + 1}"]`)
+  const rowTop = row.offsetTop
+  const rowBottom = nextRow ? nextRow.offsetTop : rowTop + row.offsetHeight
+  const fraction = (minutes % 60) / 60
+
+  return rowTop + (rowBottom - rowTop) * fraction
+}
+
+function buildDatePickerDays(monthDate: Date) {
+  const firstOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1)
+  const gridStart = addDays(firstOfMonth, -firstOfMonth.getDay())
+
+  return Array.from({ length: 42 }, (_, index) => addDays(gridStart, index))
 }
 
 function readViewName(): ViewName {
   const match = window.location.pathname.match(/^\/([^/]+)\/?$/)
   const view = match?.[1]
 
-  return view === 'programs' || view === 'hosts' || view === 'media' || view === 'settings' ? view : 'calendar'
+  return view === 'programs' || view === 'hosts' || view === 'media' || view === 'broadcast' || view === 'settings' || view === 'schedule'
+    ? view
+    : 'schedule'
 }
 
 function App() {
   const [stations, setStations] = useState<StationSummary[]>([])
-  const [selectedDay, setSelectedDay] = useState<string | null>(null)
-  const [programsByDay, setProgramsByDay] = useState<Record<string, ProgramBlock[]>>({})
-  const [selectedProgramId, setSelectedProgramId] = useState<string | null>(null)
-  const [draggedProgramId, setDraggedProgramId] = useState<string | null>(null)
-  const [dragOverProgramId, setDragOverProgramId] = useState<string | null>(null)
   const [activeView, setActiveView] = useState<ViewName>(readViewName)
-  const [visibleMonth, setVisibleMonth] = useState(() => {
+  const [isSidebarVisible, setIsSidebarVisible] = useState(readInitialSidebarVisible)
+  const [isMobileSidebar, setIsMobileSidebar] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(MOBILE_SIDEBAR_QUERY).matches,
+  )
+
+  useEffect(() => {
+    const media = window.matchMedia(MOBILE_SIDEBAR_QUERY)
+    const syncMobileSidebar = () => setIsMobileSidebar(media.matches)
+
+    syncMobileSidebar()
+    media.addEventListener('change', syncMobileSidebar)
+
+    return () => media.removeEventListener('change', syncMobileSidebar)
+  }, [])
+  const [selectedDate, setSelectedDate] = useState(() => new Date(mockAnchorDate))
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
+  const [datePickerMonth, setDatePickerMonth] = useState(
+    () => new Date(mockAnchorDate.getFullYear(), mockAnchorDate.getMonth(), 1),
+  )
+  const [blocks, setBlocks] = useState<ScheduleBlock[]>(mockBlocks)
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
+  const [mediaFilter, setMediaFilter] = useState<'all' | MediaItem['type']>('all')
+  const [hosts, setHosts] = useState(mockHosts)
+  const [programs, setPrograms] = useState<Program[]>(mockPrograms)
+  const [creationRequest, setCreationRequest] = useState<CreationRequest | null>(null)
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
+  const [editingBlockId, setEditingBlockId] = useState<string | null>(null)
+  const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null)
+  const [dragOverHour, setDragOverHour] = useState<number | null>(null)
+  const [scheduleFocusToken, setScheduleFocusToken] = useState(1)
+
+  const focusScheduleNow = useCallback(() => {
     const today = new Date()
-    return new Date(today.getFullYear(), today.getMonth(), 1)
-  })
+    setSelectedDate(today)
+    setDatePickerMonth(new Date(today.getFullYear(), today.getMonth(), 1))
+    setScheduleFocusToken((token) => token + 1)
+    setCreationRequest(null)
+    setSelectedBlockId(null)
+    setEditingBlockId(null)
+  }, [])
 
   useEffect(() => {
     const handlePopState = () => {
-      setActiveView(readViewName())
+      const nextView = readViewName()
+      setActiveView(nextView)
+
+      if (nextView === 'schedule') {
+        focusScheduleNow()
+      }
     }
 
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
-  }, [])
+  }, [focusScheduleNow])
 
   useEffect(() => {
     let ignore = false
@@ -133,134 +355,309 @@ function App() {
     }
   }, [])
 
-  const currentStation = stations[0] ?? null
+  useEffect(() => {
+    let ignore = false
 
-  const stationName = currentStation?.name ?? 'Station'
-  const days = buildMonthDays(visibleMonth)
+    async function loadMedia() {
+      try {
+        const response = await fetch(`${apiBaseUrl}/media`)
 
-  const moveMonth = (offset: number) => {
-    setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1))
-  }
+        if (!response.ok) {
+          throw new Error(`Media request failed with ${response.status}`)
+        }
 
-  const changeView = (nextView: ViewName) => {
-    window.history.pushState({}, '', nextView === 'calendar' ? '/calendar' : `/${nextView}`)
-    setActiveView(nextView)
-  }
+        const data = (await response.json()) as MediaResponse
 
-  const addProgram = (dayKey: string) => {
-    const nextProgram = {
-      id: crypto.randomUUID(),
-      title: 'Untitled program',
+        if (!ignore) {
+          setMediaItems(data.media)
+        }
+      } catch {
+        if (!ignore) {
+          setMediaItems([])
+        }
+      }
     }
 
-    setProgramsByDay((current) => ({
-      ...current,
-      [dayKey]: [...(current[dayKey] ?? []), nextProgram],
-    }))
-    setSelectedProgramId(nextProgram.id)
+    void loadMedia()
+
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  const currentStation = stations[0] ?? null
+  const stationName = currentStation?.name ?? '16 Radio'
+  const selectedDateKey = formatDateKey(selectedDate)
+  const dayBlocks = useMemo(
+    () => blocks.filter((block) => block.dateKey === selectedDateKey).sort((a, b) => a.startMinutes - b.startMinutes),
+    [blocks, selectedDateKey],
+  )
+  const changeView = (nextView: ViewName) => {
+    window.history.pushState({}, '', nextView === 'schedule' ? '/schedule' : `/${nextView}`)
+    setActiveView(nextView)
+
+    if (nextView === 'schedule') {
+      focusScheduleNow()
+    } else {
+      setCreationRequest(null)
+      setSelectedBlockId(null)
+      setEditingBlockId(null)
+    }
+
+    if (window.matchMedia(MOBILE_SIDEBAR_QUERY).matches) {
+      setIsSidebarVisible(false)
+    }
   }
 
-  const reorderProgram = (dayKey: string, targetProgramId: string | null) => {
-    if (!draggedProgramId) {
+  const moveDay = (offset: number) => {
+    setSelectedDate((current) => {
+      const nextDate = addDays(current, offset)
+      setDatePickerMonth(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1))
+      return nextDate
+    })
+    setCreationRequest(null)
+    setSelectedBlockId(null)
+    setEditingBlockId(null)
+  }
+
+  const selectDate = (nextDate: Date) => {
+    setSelectedDate(nextDate)
+    setDatePickerMonth(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1))
+    setIsDatePickerOpen(false)
+    setCreationRequest(null)
+    setSelectedBlockId(null)
+    setEditingBlockId(null)
+  }
+
+  const saveBlock = (blockInput: ScheduleBlockDraft) => {
+    const request = creationRequest
+
+    if (!request) {
       return
     }
 
-    setProgramsByDay((current) => {
-      const programs = current[dayKey] ?? []
-      const draggedProgram = programs.find((program) => program.id === draggedProgramId)
+    const nextBlock: ScheduleBlock = {
+      ...blockInput,
+      id: crypto.randomUUID(),
+      dateKey: request.dateKey,
+    }
 
-      if (!draggedProgram) {
+    setBlocks((current) => [...current, nextBlock])
+    setSelectedBlockId(nextBlock.id)
+    setCreationRequest(null)
+  }
+
+  const updateBlock = (blockId: string, blockInput: ScheduleBlockDraft) => {
+    setBlocks((current) => current.map((block) => (block.id === blockId ? { ...block, ...blockInput } : block)))
+    setSelectedBlockId(blockId)
+    setEditingBlockId(null)
+  }
+
+  const duplicateBlock = (blockId: string) => {
+    setBlocks((current) => {
+      const block = current.find((item) => item.id === blockId)
+
+      if (!block) {
         return current
       }
 
-      const withoutDragged = programs.filter((program) => program.id !== draggedProgramId)
-      const targetIndex = targetProgramId ? withoutDragged.findIndex((program) => program.id === targetProgramId) : withoutDragged.length
-      const insertIndex = targetIndex >= 0 ? targetIndex : withoutDragged.length
-      const nextPrograms = [...withoutDragged]
-
-      nextPrograms.splice(insertIndex, 0, draggedProgram)
-
-      return {
-        ...current,
-        [dayKey]: nextPrograms,
+      const duration = Math.max(30, block.endMinutes - block.startMinutes)
+      const startMinutes = Math.min(1440 - duration, block.endMinutes)
+      const nextBlock = {
+        ...block,
+        id: crypto.randomUUID(),
+        title: `${block.title} copy`,
+        startMinutes,
+        endMinutes: startMinutes + duration,
       }
+
+      return [...current, nextBlock]
+    })
+  }
+
+  const removeBlock = (blockId: string) => {
+    setBlocks((current) => current.filter((block) => block.id !== blockId))
+    setSelectedBlockId((current) => (current === blockId ? null : current))
+    setEditingBlockId((current) => (current === blockId ? null : current))
+  }
+
+  const moveBlock = (blockId: string, hour: number) => {
+    setBlocks((current) =>
+      current.map((block) => {
+        if (block.id !== blockId) {
+          return block
+        }
+
+        const duration = Math.max(30, block.endMinutes - block.startMinutes)
+        const startMinutes = Math.min(clampHour(hour) * 60, 1440 - duration)
+
+        return {
+          ...block,
+          dateKey: selectedDateKey,
+          startMinutes,
+          endMinutes: startMinutes + duration,
+        }
+      }),
+    )
+    setDragOverHour(null)
+  }
+
+  const beginCreate = (hour: number, kind: ScheduleBlock['kind'] | null = null) => {
+    setCreationRequest({ dateKey: selectedDateKey, hour, kind })
+    setSelectedBlockId(null)
+    setEditingBlockId(null)
+  }
+
+  const uploadMedia = async (file: File) => {
+    const response = await fetch(`${apiBaseUrl}/media`, {
+      body: file,
+      headers: {
+        'Content-Type': file.type || 'application/octet-stream',
+        'X-File-Name': file.name,
+      },
+      method: 'POST',
     })
 
-    setDraggedProgramId(null)
-    setDragOverProgramId(null)
+    if (!response.ok) {
+      throw new Error(`Upload failed with ${response.status}`)
+    }
+
+    const data = (await response.json()) as { media: MediaItem }
+    setMediaItems((current) => [data.media, ...current.filter((item) => item.id !== data.media.id)])
+  }
+
+  const deleteMedia = async (mediaId: string) => {
+    const response = await fetch(`${apiBaseUrl}/media/${encodeURIComponent(mediaId)}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      throw new Error(`Delete failed with ${response.status}`)
+    }
+
+    setMediaItems((current) => current.filter((item) => item.id !== mediaId))
   }
 
   return (
     <main className="app-page">
       <section className="app-shell" aria-label="Rdio scheduler">
-        <PageHeader />
-        <div className="app-body">
-          {currentStation ? (
-            <AppSidebar activeView={activeView} stationName={stationName} onChangeView={changeView} />
+        <PageHeader
+          alignWithSidebar={isSidebarVisible && currentStation !== null && !isMobileSidebar}
+          isSidebarOpen={isSidebarVisible}
+          onToggleSidebar={() => setIsSidebarVisible((current) => !current)}
+        />
+        <div
+          className={
+            isSidebarVisible && currentStation && !isMobileSidebar ? 'app-body has-sidebar' : 'app-body'
+          }
+        >
+          {currentStation && isSidebarVisible && isMobileSidebar ? (
+            <button
+              className="sidebar-backdrop"
+              type="button"
+              aria-label="Close menu"
+              onClick={() => setIsSidebarVisible(false)}
+            />
+          ) : null}
+          {currentStation && isSidebarVisible ? (
+            <AppSidebar
+              activeView={activeView}
+              isMobileOverlay={isMobileSidebar}
+              stationName={stationName}
+              onChangeView={changeView}
+            />
           ) : null}
           <div className={currentStation ? 'shell station-shell' : 'shell'}>
             {!currentStation ? (
               <StationLoading />
-            ) : activeView === 'calendar' ? (
-              <section className="calendar-view" aria-label={`${stationName} calendar`}>
-                <div className="calendar-sticky">
-                  <div className="section-title">
-                    <span>Station</span>
-                    <strong>{stationName}</strong>
-                  </div>
-                  <div className="month-toggle" aria-label="Calendar month">
-                    <button type="button" onClick={() => moveMonth(-1)} aria-label="Previous month">
-                      <ChevronLeft aria-hidden="true" size={18} strokeWidth={1.8} />
-                    </button>
-                    <span>{formatMonthLabel(visibleMonth)}</span>
-                    <button type="button" onClick={() => moveMonth(1)} aria-label="Next month">
-                      <ChevronRight aria-hidden="true" size={18} strokeWidth={1.8} />
-                    </button>
-                  </div>
-                </div>
-                <div className="day-list">
-                  {days.map((day) => {
-                    const dayKey = formatDateKey(day)
-                    const dayPrograms = programsByDay[dayKey] ?? []
-
-                    return (
-                      <React.Fragment key={dayKey}>
-                        <LineCard
-                          className={selectedDay === dayKey ? 'day-line is-selected' : 'day-line'}
-                          onClick={() => setSelectedDay((current) => (current === dayKey ? null : dayKey))}
-                        >
-                          <span className="day-number">{day.getDate()}</span>
-                          <span className="day-name">{formatWeekday(day)}</span>
-                          <span className="day-balance" aria-hidden={dayPrograms.length === 0}>
-                            {dayPrograms.length > 0 ? `${dayPrograms.length}` : null}
-                          </span>
-                        </LineCard>
-                        {selectedDay === dayKey ? (
-                          <DayPrograms
-                            day={day}
-                            programs={dayPrograms}
-                            selectedProgramId={selectedProgramId}
-                            dragOverProgramId={dragOverProgramId}
-                            onAddProgram={() => addProgram(dayKey)}
-                            onSelectProgram={setSelectedProgramId}
-                            onDragProgram={setDraggedProgramId}
-                            onDragOverProgram={setDragOverProgramId}
-                            onDropProgram={(targetProgramId) => reorderProgram(dayKey, targetProgramId)}
-                            onEndDrag={() => {
-                              setDraggedProgramId(null)
-                              setDragOverProgramId(null)
-                            }}
-                          />
-                        ) : null}
-                      </React.Fragment>
-                    )
-                  })}
-                </div>
-              </section>
-            ) : activeView === 'settings' ? (
-              <StationSettings station={currentStation} />
+            ) : activeView === 'schedule' ? (
+              <DailyCalendar
+                blocks={dayBlocks}
+                creationRequest={creationRequest}
+                datePickerMonth={datePickerMonth}
+                dragOverHour={dragOverHour}
+                draggedBlockId={draggedBlockId}
+                editingBlockId={editingBlockId}
+                focusNowToken={scheduleFocusToken}
+                hosts={getHostNames(hosts)}
+                isDatePickerOpen={isDatePickerOpen}
+                mediaItems={mediaItems}
+                programs={programs}
+                selectedBlockId={selectedBlockId}
+                selectedDate={selectedDate}
+                selectedDateKey={selectedDateKey}
+                onAddHost={(hostName) => setHosts((current) => addHostByName(current, hostName))}
+                onBeginCreate={beginCreate}
+                onCancelCreate={() => setCreationRequest(null)}
+                onChangeCreationKind={(kind) => setCreationRequest((current) => (current ? { ...current, kind } : current))}
+                onDatePickerMonthChange={setDatePickerMonth}
+                onDuplicateBlock={duplicateBlock}
+                onEditBlock={(blockId) => {
+                  setEditingBlockId(blockId)
+                  if (blockId) {
+                    setCreationRequest(null)
+                  }
+                }}
+                onMoveBlock={moveBlock}
+                onMoveDay={moveDay}
+                onRemoveBlock={removeBlock}
+                onSaveBlock={saveBlock}
+                onSelectBlock={setSelectedBlockId}
+                onSelectDate={selectDate}
+                onSetDragOverHour={setDragOverHour}
+                onSetDraggedBlockId={setDraggedBlockId}
+                onToggleDatePicker={() => setIsDatePickerOpen((current) => !current)}
+                onUpdateBlock={updateBlock}
+              />
+            ) : activeView === 'programs' ? (
+              <ProgramsPage
+                hosts={hosts}
+                programs={programs}
+                onAddHost={(hostName) => setHosts((current) => addHostByName(current, hostName))}
+                onCreateProgram={(program) => setPrograms((current) => [...current, { ...program, id: crypto.randomUUID() }])}
+                onUpdateProgram={(programId, program) =>
+                  setPrograms((current) =>
+                    current.map((item) => (item.id === programId ? { ...item, ...program } : item)),
+                  )
+                }
+                onDeleteProgram={(programId) =>
+                  setPrograms((current) => current.filter((item) => item.id !== programId))
+                }
+              />
+            ) : activeView === 'hosts' ? (
+              <HostsPage
+                hosts={hosts}
+                onAddHost={(host) =>
+                  setHosts((current) =>
+                    current.some((item) => item.name === host.name) ? current : [...current, host],
+                  )
+                }
+                onRemoveHost={(hostName) => setHosts((current) => current.filter((item) => item.name !== hostName))}
+                onUpdateHost={(hostName, host) => {
+                  setHosts((current) => current.map((item) => (item.name === hostName ? host : item)))
+                  setPrograms((current) =>
+                    current.map((item) => (item.host === hostName ? { ...item, host: host.name } : item)),
+                  )
+                  setBlocks((current) =>
+                    current.map((item) => ({
+                      ...item,
+                      hosts: item.hosts.map((entry) => (entry === hostName ? host.name : entry)),
+                    })),
+                  )
+                }}
+              />
+            ) : activeView === 'media' ? (
+              <MediaPage
+                filter={mediaFilter}
+                mediaItems={mediaItems}
+                onChangeFilter={setMediaFilter}
+                onDeleteMedia={deleteMedia}
+                onUploadMedia={uploadMedia}
+              />
+            ) : activeView === 'broadcast' ? (
+              <BroadcastPage station={currentStation} />
             ) : (
-              <EmptyPage label={activeView} />
+              <StationSettings station={currentStation} />
             )}
           </div>
         </div>
@@ -270,36 +667,33 @@ function App() {
   )
 }
 
-function LineCard({
-  children,
-  className,
-  onClick,
+function PageHeader({
+  alignWithSidebar,
+  isSidebarOpen,
+  onToggleSidebar,
 }: {
-  children: React.ReactNode
-  className: string
-  onClick: () => void
+  alignWithSidebar: boolean
+  isSidebarOpen: boolean
+  onToggleSidebar: () => void
 }) {
-  return (
-    <button className={`line-card ${className}`} type="button" onClick={onClick}>
-      {children}
-    </button>
-  )
-}
+  const SidebarIcon = isSidebarOpen ? PanelLeftClose : PanelLeftOpen
 
-function PageHeader() {
   return (
-    <header className="page-header">
-      <div className="brand-mark">rdio</div>
-      <label className="search-field">
-        <span className="sr-only">Search</span>
-        <input aria-label="Search" />
-        <button type="button" aria-label="Submit search">
-          <Search aria-hidden="true" size={16} strokeWidth={2.3} />
+    <header className={alignWithSidebar ? 'page-header has-sidebar' : 'page-header'}>
+      <div className="page-header-lead">
+        <button
+          className="sidebar-toggle"
+          type="button"
+          onClick={onToggleSidebar}
+          aria-expanded={isSidebarOpen}
+          aria-label="Toggle sidebar"
+        >
+          <SidebarIcon aria-hidden="true" size={14} strokeWidth={1.8} />
         </button>
-      </label>
-      <div className="account-menu">
-        <span>Bryan Clark</span>
-        <Bell aria-hidden="true" size={16} strokeWidth={1.8} />
+      </div>
+      <div className="page-header-main">
+        <div className="toolbar-spacer" />
+        <div className="brand-mark">rdio</div>
       </div>
     </header>
   )
@@ -307,47 +701,49 @@ function PageHeader() {
 
 function AppSidebar({
   activeView,
+  isMobileOverlay,
   stationName,
   onChangeView,
 }: {
   activeView: ViewName
+  isMobileOverlay: boolean
   stationName: string
   onChangeView: (view: ViewName) => void
 }) {
   return (
-    <aside className="sidebar" aria-label="Library">
-      <nav className="sidebar-group" aria-label="Station views">
-        <button className={activeView === 'calendar' ? 'is-active' : ''} type="button" onClick={() => onChangeView('calendar')}>
-          <CalendarDays aria-hidden="true" size={14} strokeWidth={1.8} />
-          Calendar
-        </button>
-        <button className={activeView === 'programs' ? 'is-active' : ''} type="button" onClick={() => onChangeView('programs')}>
-          <ListMusic aria-hidden="true" size={14} strokeWidth={1.8} />
-          Programs
-        </button>
-        <button className={activeView === 'hosts' ? 'is-active' : ''} type="button" onClick={() => onChangeView('hosts')}>
-          <Users aria-hidden="true" size={14} strokeWidth={1.8} />
-          Hosts
-        </button>
-        <button className={activeView === 'media' ? 'is-active' : ''} type="button" onClick={() => onChangeView('media')}>
-          <UploadCloud aria-hidden="true" size={14} strokeWidth={1.8} />
-          Media
-        </button>
-        <button className={activeView === 'settings' ? 'is-active' : ''} type="button" onClick={() => onChangeView('settings')}>
-          <Settings aria-hidden="true" size={14} strokeWidth={1.8} />
-          Settings
-        </button>
+    <aside className={isMobileOverlay ? 'sidebar is-mobile-overlay' : 'sidebar'} aria-label="Library">
+      <nav className="sidebar-nav" aria-label="Station views">
+        <SidebarButton active={activeView === 'schedule'} icon={CalendarDays} label="Schedule" onClick={() => onChangeView('schedule')} />
+        <SidebarButton active={activeView === 'broadcast'} icon={Radio} label="Broadcast" onClick={() => onChangeView('broadcast')} />
+        <SidebarButton active={activeView === 'programs'} icon={BookOpen} label="Programs" onClick={() => onChangeView('programs')} />
+        <SidebarButton active={activeView === 'hosts'} icon={Users} label="Hosts" onClick={() => onChangeView('hosts')} />
+        <SidebarButton active={activeView === 'media'} icon={ListMusic} label="Media" onClick={() => onChangeView('media')} />
+        <SidebarButton active={activeView === 'settings'} icon={Settings} label="Settings" onClick={() => onChangeView('settings')} />
       </nav>
-      <div className="sidebar-section">
-        <span>Collection</span>
-        <a href={apiBaseUrl}>API</a>
-        <a href="http://localhost:8000">Icecast</a>
-      </div>
-      <div className="sidebar-section">
-        <span>Station</span>
-        <p>{stationName}</p>
+      <div className="sidebar-footer">
+        <p className="sidebar-station">{stationName}</p>
+        <p className="sidebar-copyright">© 2026</p>
       </div>
     </aside>
+  )
+}
+
+function SidebarButton({
+  active,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  active: boolean
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement> & { size?: number; strokeWidth?: number }>
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button className={active ? 'is-active' : ''} type="button" onClick={onClick}>
+      <Icon aria-hidden={true} size={14} strokeWidth={1.8} />
+      {label}
+    </button>
   )
 }
 
@@ -359,10 +755,1004 @@ function StationLoading() {
   )
 }
 
-function EmptyPage({ label }: { label: Exclude<ViewName, 'calendar' | 'settings'> }) {
+function Modal({
+  children,
+  onClose,
+  title,
+}: {
+  children: React.ReactNode
+  onClose: () => void
+  title: string
+}) {
   return (
-    <section className="empty-page" aria-label={label}>
-      <p>{label}</p>
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        aria-label={title}
+        aria-modal="true"
+        className="modal-panel"
+        role="dialog"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="modal-header">
+          <strong>{title}</strong>
+          <button type="button" onClick={onClose} aria-label="Close modal">
+            <X aria-hidden="true" size={15} strokeWidth={1.8} />
+          </button>
+        </div>
+        {children}
+      </section>
+    </div>
+  )
+}
+
+function findMediaIdForFile(file: UploadedFileSummary | undefined, mediaItems: MediaItem[]) {
+  if (!file) {
+    return null
+  }
+
+  const match = mediaItems.find((item) => item.name === file.name && item.size === file.size)
+  return match?.id ?? null
+}
+
+function slotModalTitle(request: CreationRequest | null, editingBlock?: ScheduleBlock) {
+  if (editingBlock) {
+    return 'Edit slot'
+  }
+
+  if (!request?.kind) {
+    return 'Add to schedule'
+  }
+
+  return request.kind === 'broadcast' ? 'Live Broadcast' : 'Media'
+}
+
+function DailyCalendar({
+  blocks,
+  creationRequest,
+  datePickerMonth,
+  dragOverHour,
+  draggedBlockId,
+  editingBlockId,
+  focusNowToken,
+  hosts,
+  isDatePickerOpen,
+  mediaItems,
+  programs,
+  selectedBlockId,
+  selectedDate,
+  selectedDateKey,
+  onAddHost,
+  onBeginCreate,
+  onCancelCreate,
+  onChangeCreationKind,
+  onDatePickerMonthChange,
+  onDuplicateBlock,
+  onEditBlock,
+  onMoveBlock,
+  onMoveDay,
+  onRemoveBlock,
+  onSaveBlock,
+  onSelectBlock,
+  onSelectDate,
+  onSetDragOverHour,
+  onSetDraggedBlockId,
+  onToggleDatePicker,
+  onUpdateBlock,
+}: {
+  blocks: ScheduleBlock[]
+  creationRequest: CreationRequest | null
+  datePickerMonth: Date
+  dragOverHour: number | null
+  draggedBlockId: string | null
+  editingBlockId: string | null
+  focusNowToken: number
+  hosts: string[]
+  isDatePickerOpen: boolean
+  mediaItems: MediaItem[]
+  programs: Program[]
+  selectedBlockId: string | null
+  selectedDate: Date
+  selectedDateKey: string
+  onAddHost: (host: string) => void
+  onBeginCreate: (hour: number, kind?: ScheduleBlock['kind'] | null) => void
+  onCancelCreate: () => void
+  onChangeCreationKind: (kind: ScheduleBlock['kind']) => void
+  onDatePickerMonthChange: (date: Date) => void
+  onDuplicateBlock: (blockId: string) => void
+  onEditBlock: (blockId: string | null) => void
+  onMoveBlock: (blockId: string, hour: number) => void
+  onMoveDay: (offset: number) => void
+  onRemoveBlock: (blockId: string) => void
+  onSaveBlock: (block: ScheduleBlockDraft) => void
+  onSelectBlock: (blockId: string | null) => void
+  onSelectDate: (date: Date) => void
+  onSetDragOverHour: (hour: number | null) => void
+  onSetDraggedBlockId: (blockId: string | null) => void
+  onToggleDatePicker: () => void
+  onUpdateBlock: (blockId: string, block: ScheduleBlockDraft) => void
+}) {
+  const calendarRef = useRef<HTMLElement>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
+  const lastFocusNowTokenRef = useRef(0)
+  const [nowIndicator, setNowIndicator] = useState<{ time: string; top: number } | null>(null)
+
+  const editingBlock = editingBlockId ? blocks.find((block) => block.id === editingBlockId) : undefined
+  const activeRequest = editingBlock
+    ? {
+        dateKey: editingBlock.dateKey,
+        hour: Math.floor(editingBlock.startMinutes / 60),
+        kind: editingBlock.kind,
+      }
+    : creationRequest
+  const isToday = isSameCalendarDay(selectedDate, new Date())
+
+  useLayoutEffect(() => {
+    const calendar = calendarRef.current
+    const grid = gridRef.current
+
+    if (!calendar || !grid) {
+      return
+    }
+
+    const scrollRoot = calendar.closest('.shell')
+
+    if (!(scrollRoot instanceof HTMLElement)) {
+      return
+    }
+
+    const sticky = calendar.querySelector('.calendar-sticky')
+    const stickyOffset = sticky instanceof HTMLElement ? sticky.offsetHeight + 8 : 96
+    const gridTop = grid.getBoundingClientRect().top - scrollRoot.getBoundingClientRect().top + scrollRoot.scrollTop
+
+    if (lastFocusNowTokenRef.current !== focusNowToken) {
+      lastFocusNowTokenRef.current = focusNowToken
+
+      if (isToday) {
+        const offsetInGrid = getMinutesOffsetInGrid(grid, getNowMinutes())
+        scrollRoot.scrollTop = Math.max(0, gridTop + offsetInGrid - stickyOffset - 24)
+      } else {
+        scrollRoot.scrollTop = Math.max(0, gridTop - stickyOffset)
+      }
+
+      return
+    }
+
+    scrollRoot.scrollTop = Math.max(0, gridTop - stickyOffset)
+  }, [focusNowToken, isToday, selectedDateKey])
+
+  useLayoutEffect(() => {
+    const grid = gridRef.current
+
+    if (!grid || !isToday) {
+      setNowIndicator(null)
+      return
+    }
+
+    const tick = () => {
+      const now = new Date()
+      setNowIndicator({
+        time: formatNowClock(now),
+        top: getMinutesOffsetInGrid(grid, getNowMinutes(now)),
+      })
+    }
+
+    tick()
+    const interval = window.setInterval(tick, 1000)
+    window.addEventListener('resize', tick)
+
+    return () => {
+      window.clearInterval(interval)
+      window.removeEventListener('resize', tick)
+    }
+  }, [blocks, isToday, selectedDateKey])
+
+  return (
+    <section className="calendar-view" ref={calendarRef} aria-label="Daily schedule">
+      <div className="calendar-sticky">
+        <div className="day-toggle" aria-label="Schedule day">
+          <button type="button" onClick={() => onMoveDay(-1)} aria-label="Previous day">
+            <ChevronLeft aria-hidden="true" size={18} strokeWidth={1.8} />
+          </button>
+          <div className="date-popover-anchor">
+            <button className="date-button" type="button" onClick={onToggleDatePicker}>
+              <CalendarClock aria-hidden="true" size={16} strokeWidth={1.8} />
+              <span>{formatDayTitle(selectedDate)}</span>
+            </button>
+            {isDatePickerOpen ? (
+              <DatePickerPopover
+                monthDate={datePickerMonth}
+                selectedDateKey={selectedDateKey}
+                onChangeMonth={(offset) =>
+                  onDatePickerMonthChange(new Date(datePickerMonth.getFullYear(), datePickerMonth.getMonth() + offset, 1))
+                }
+                onSelectDate={onSelectDate}
+              />
+            ) : null}
+          </div>
+          <button type="button" onClick={() => onMoveDay(1)} aria-label="Next day">
+            <ChevronRight aria-hidden="true" size={18} strokeWidth={1.8} />
+          </button>
+        </div>
+      </div>
+
+      <div className="daily-grid" ref={gridRef} aria-label={`${formatDayTitle(selectedDate)} schedule`}>
+        {hours.map((hour) => {
+          const hourBlocks = blocks.filter((block) => Math.floor(block.startMinutes / 60) === hour)
+          const isActiveHour =
+            activeRequest?.dateKey === selectedDateKey && activeRequest.hour === hour && (creationRequest || editingBlock)
+          const isDropTarget = dragOverHour === hour && draggedBlockId !== null
+
+          return (
+            <div
+              className={['hour-row', isDropTarget ? 'is-drop-target' : '', isActiveHour ? 'is-active-hour' : '']
+                .filter(Boolean)
+                .join(' ')}
+              data-hour={hour}
+              key={hour}
+              onClick={() => onBeginCreate(hour)}
+              onDragOver={(event) => {
+                if (!draggedBlockId) {
+                  return
+                }
+
+                event.preventDefault()
+                onSetDragOverHour(hour)
+              }}
+              onDrop={(event) => {
+                event.preventDefault()
+
+                if (draggedBlockId) {
+                  onMoveBlock(draggedBlockId, hour)
+                  onSetDraggedBlockId(null)
+                }
+              }}
+            >
+              <time className="hour-label" dateTime={`${String(hour).padStart(2, '0')}:00`}>
+                {formatHour(hour)}
+              </time>
+              <div className="hour-lane">
+                {hourBlocks.length === 0 ? <span className="slot-hint">Click to add</span> : null}
+                {hourBlocks.map((block) => (
+                  <ScheduleBlockCard
+                    block={block}
+                    isSelected={selectedBlockId === block.id}
+                    key={block.id}
+                    onDuplicate={() => onDuplicateBlock(block.id)}
+                    onEdit={() => onEditBlock(block.id)}
+                    onDragEnd={() => {
+                      onSetDraggedBlockId(null)
+                      onSetDragOverHour(null)
+                    }}
+                    onDragStart={() => onSetDraggedBlockId(block.id)}
+                    onRemove={() => onRemoveBlock(block.id)}
+                    onSelect={() => onSelectBlock(block.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )
+        })}
+        {isToday && nowIndicator ? (
+          <div
+            className="calendar-now-indicator"
+            style={{ top: `${nowIndicator.top}px` }}
+            aria-hidden="true"
+          >
+            <time className="calendar-now-label">{nowIndicator.time}</time>
+            <div className="calendar-now-line" />
+          </div>
+        ) : null}
+      </div>
+
+      {activeRequest ? (
+        <Modal
+          title={slotModalTitle(creationRequest, editingBlock)}
+          onClose={() => {
+            onCancelCreate()
+            onEditBlock(null)
+          }}
+        >
+          <CreationPanel
+            editingBlock={editingBlock}
+            hosts={hosts}
+            key={editingBlock?.id ?? `${activeRequest.dateKey}-${activeRequest.hour}-${activeRequest.kind ?? 'pick'}`}
+            mediaItems={mediaItems}
+            programs={programs}
+            request={activeRequest}
+            onAddHost={onAddHost}
+            onCancel={() => {
+              onCancelCreate()
+              onEditBlock(null)
+            }}
+            onChangeKind={onChangeCreationKind}
+            onSave={(blockInput) => {
+              if (editingBlock) {
+                onUpdateBlock(editingBlock.id, blockInput)
+                onEditBlock(null)
+                return
+              }
+
+              onSaveBlock(blockInput)
+            }}
+          />
+        </Modal>
+      ) : null}
+    </section>
+  )
+}
+
+function DatePickerPopover({
+  monthDate,
+  selectedDateKey,
+  onChangeMonth,
+  onSelectDate,
+}: {
+  monthDate: Date
+  selectedDateKey: string
+  onChangeMonth: (offset: number) => void
+  onSelectDate: (date: Date) => void
+}) {
+  const days = buildDatePickerDays(monthDate)
+
+  return (
+    <div className="date-picker-popover">
+      <div className="date-picker-header">
+        <button type="button" onClick={() => onChangeMonth(-1)} aria-label="Previous month">
+          <ChevronLeft aria-hidden="true" size={15} strokeWidth={1.8} />
+        </button>
+        <strong>{formatMonthLabel(monthDate)}</strong>
+        <button type="button" onClick={() => onChangeMonth(1)} aria-label="Next month">
+          <ChevronRight aria-hidden="true" size={15} strokeWidth={1.8} />
+        </button>
+      </div>
+      <div className="date-picker-weekdays" aria-hidden="true">
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+          <span key={`${day}-${index}`}>{day}</span>
+        ))}
+      </div>
+      <div className="date-picker-grid">
+        {days.map((day) => {
+          const dayKey = formatDateKey(day)
+          const isSelected = dayKey === selectedDateKey
+          const isOutsideMonth = day.getMonth() !== monthDate.getMonth()
+
+          return (
+            <button
+              className={[isSelected ? 'is-selected' : '', isOutsideMonth ? 'is-muted' : ''].filter(Boolean).join(' ')}
+              key={dayKey}
+              type="button"
+              onClick={() => onSelectDate(day)}
+            >
+              {day.getDate()}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function CreationPanel({
+  editingBlock,
+  hosts,
+  mediaItems,
+  programs,
+  request,
+  onAddHost,
+  onCancel,
+  onChangeKind,
+  onSave,
+}: {
+  editingBlock?: ScheduleBlock
+  hosts: string[]
+  mediaItems: MediaItem[]
+  programs: Program[]
+  request: CreationRequest
+  onAddHost: (host: string) => void
+  onCancel: () => void
+  onChangeKind: (kind: ScheduleBlock['kind']) => void
+  onSave: (block: ScheduleBlockDraft) => void
+}) {
+  const defaultStartMinutes = request.hour * 60
+  const defaultEndMinutes = Math.min(1439, defaultStartMinutes + 60)
+  const initialMediaId = editingBlock?.mediaId ?? findMediaIdForFile(editingBlock?.file, mediaItems)
+  const [title, setTitle] = useState(editingBlock?.title ?? (request.kind === 'broadcast' ? 'Live Broadcast' : 'New Media Slot'))
+  const [description, setDescription] = useState(editingBlock?.description ?? '')
+  const [startTime, setStartTime] = useState(minutesToTimeInput(editingBlock?.startMinutes ?? defaultStartMinutes))
+  const [endTime, setEndTime] = useState(minutesToTimeInput(editingBlock?.endMinutes ?? defaultEndMinutes))
+  const [selectedHosts, setSelectedHosts] = useState<string[]>(editingBlock?.hosts ?? hosts.slice(0, 1))
+  const [selectedProgramId, setSelectedProgramId] = useState(editingBlock?.programId ?? '')
+  const [selectedMediaId, setSelectedMediaId] = useState<string | null>(initialMediaId)
+  const [mediaSource, setMediaSource] = useState<'library' | 'upload'>(initialMediaId ? 'library' : 'upload')
+  const [mediaFile, setMediaFile] = useState<File | null>(null)
+  const selectedProgram = programs.find((program) => program.id === selectedProgramId)
+
+  useEffect(() => {
+    if (editingBlock) {
+      return
+    }
+
+    setTitle(request.kind === 'broadcast' ? 'Live Broadcast' : 'New Media Slot')
+  }, [editingBlock, request.kind])
+
+  useEffect(() => {
+    if (!selectedProgram) {
+      return
+    }
+
+    setTitle(selectedProgram.title)
+    setDescription(selectedProgram.description)
+    setSelectedHosts([selectedProgram.host])
+  }, [selectedProgram])
+
+  if (!request.kind) {
+    return (
+      <div className="creation-choice">
+        <button type="button" onClick={() => onChangeKind('broadcast')}>
+          <Mic2 aria-hidden="true" size={15} strokeWidth={1.8} />
+          Live Broadcast
+        </button>
+        <button type="button" onClick={() => onChangeKind('media')}>
+          <ListMusic aria-hidden="true" size={15} strokeWidth={1.8} />
+          Media
+        </button>
+      </div>
+    )
+  }
+
+  const kind = request.kind
+
+  const resolveMediaSelection = () => {
+    if (kind !== 'media') {
+      return { file: undefined, mediaId: undefined }
+    }
+
+    if (mediaSource === 'library' && selectedMediaId) {
+      const item = mediaItems.find((entry) => entry.id === selectedMediaId)
+
+      if (item) {
+        return {
+          file: { name: item.name, size: item.size },
+          mediaId: item.id,
+        }
+      }
+    }
+
+    if (mediaSource === 'upload' && mediaFile) {
+      return {
+        file: { name: mediaFile.name, size: mediaFile.size },
+        mediaId: undefined,
+      }
+    }
+
+    if (editingBlock?.file) {
+      return {
+        file: editingBlock.file,
+        mediaId: editingBlock.mediaId,
+      }
+    }
+
+    return { file: undefined, mediaId: undefined }
+  }
+
+  return (
+    <form
+      className="creation-form"
+      onSubmit={(event) => {
+        event.preventDefault()
+
+        const startMinutes = timeInputToMinutes(startTime)
+        const rawEndMinutes = timeInputToMinutes(endTime)
+        const endMinutes = rawEndMinutes > startMinutes ? rawEndMinutes : Math.min(1439, startMinutes + 30)
+        const mediaSelection = resolveMediaSelection()
+
+        onSave({
+          kind,
+          title: selectedProgram?.title ?? (title.trim() || (kind === 'broadcast' ? 'Live Broadcast' : 'New Media Slot')),
+          description: selectedProgram?.description ?? description.trim(),
+          startMinutes,
+          endMinutes,
+          hosts: selectedProgram ? [selectedProgram.host] : selectedHosts,
+          programId: selectedProgram?.id,
+          file: mediaSelection.file,
+          mediaId: mediaSelection.mediaId,
+        })
+      }}
+    >
+      <p className="slot-form-context">
+        {formatHour(request.hour)} on {formatShortDate(dateFromKey(request.dateKey))}
+      </p>
+      <label>
+        <span>Program</span>
+        <select value={selectedProgramId} onChange={(event) => setSelectedProgramId(event.target.value)}>
+          <option value="">No program</option>
+          {programs.map((program) => (
+            <option key={program.id} value={program.id}>
+              {program.title}
+            </option>
+          ))}
+        </select>
+      </label>
+      <MultiSelect
+        label="Host"
+        options={hosts}
+        placeholder="Select hosts"
+        value={selectedProgram ? [selectedProgram.host] : selectedHosts}
+        disabled={selectedProgram !== undefined}
+        onChange={setSelectedHosts}
+        onCreateOption={selectedProgram ? undefined : onAddHost}
+        createPlaceholder="New host name"
+      />
+      <label>
+        <span>Title</span>
+        <input disabled={selectedProgram !== undefined} value={title} onChange={(event) => setTitle(event.target.value)} />
+      </label>
+      <label>
+        <span>Start time</span>
+        <input type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
+      </label>
+      <label>
+        <span>End time</span>
+        <input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
+      </label>
+      {request.kind === 'media' ? (
+        <MediaSlotField
+          mediaItems={mediaItems}
+          selectedMediaId={selectedMediaId}
+          source={mediaSource}
+          uploadFile={mediaFile}
+          onChangeSource={setMediaSource}
+          onSelectMedia={setSelectedMediaId}
+          onChangeUploadFile={(nextFile) => {
+            setMediaFile(nextFile)
+
+            if (nextFile && !selectedProgram && (title === 'New Media Slot' || title.trim() === '')) {
+              setTitle(nextFile.name)
+            }
+          }}
+        />
+      ) : null}
+      <label>
+        <span>Description</span>
+        <textarea disabled={selectedProgram !== undefined} value={description} onChange={(event) => setDescription(event.target.value)} />
+      </label>
+      <div className="form-actions">
+        <button type="button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button className="primary-action" type="submit">
+          {editingBlock ? 'Update' : 'Save'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+function ScheduleBlockCard({
+  block,
+  isSelected,
+  onDragEnd,
+  onDragStart,
+  onDuplicate,
+  onEdit,
+  onRemove,
+  onSelect,
+}: {
+  block: ScheduleBlock
+  isSelected: boolean
+  onDragEnd: () => void
+  onDragStart: () => void
+  onDuplicate: () => void
+  onEdit: () => void
+  onRemove: () => void
+  onSelect: () => void
+}) {
+  const Icon = block.kind === 'broadcast' ? Mic2 : ListMusic
+  const durationMinutes = Math.max(30, block.endMinutes - block.startMinutes)
+
+  return (
+    <article
+      className={[
+        'schedule-block',
+        block.kind === 'broadcast' ? 'is-broadcast' : 'is-media',
+        isSelected ? 'is-selected' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      draggable
+      onClick={(event) => {
+        event.stopPropagation()
+        onSelect()
+      }}
+      onDoubleClick={(event) => {
+        event.stopPropagation()
+        onSelect()
+        onEdit()
+      }}
+      onDragEnd={onDragEnd}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = 'move'
+        onDragStart()
+      }}
+      style={{ minHeight: `${Math.max(52, (durationMinutes / 60) * 56)}px` }}
+    >
+      <button className="block-handle" type="button" aria-label="Drag block">
+        <GripVertical aria-hidden="true" size={16} strokeWidth={1.8} />
+      </button>
+      <div className="block-copy">
+        <strong>
+          <Icon aria-hidden="true" size={14} strokeWidth={1.8} />
+          {block.title}
+        </strong>
+        <span>
+          {formatClockTime(block.startMinutes)} - {formatClockTime(block.endMinutes)}
+          {block.hosts.length > 0 ? ` · ${block.hosts.join(', ')}` : ''}
+        </span>
+        {block.description ? <span>{block.description}</span> : null}
+        {block.file ? <span>{block.file.name}</span> : null}
+      </div>
+      {isSelected ? (
+        <div className="block-actions">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              onEdit()
+            }}
+            aria-label="Edit block"
+          >
+            <Settings aria-hidden="true" size={14} strokeWidth={1.8} />
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              onDuplicate()
+            }}
+            aria-label="Duplicate block"
+          >
+            <Copy aria-hidden="true" size={14} strokeWidth={1.8} />
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              onRemove()
+            }}
+            aria-label="Remove block"
+          >
+            <Trash2 aria-hidden="true" size={14} strokeWidth={1.8} />
+          </button>
+        </div>
+      ) : null}
+    </article>
+  )
+}
+
+function ProgramsPage({
+  hosts,
+  programs,
+  onAddHost,
+  onCreateProgram,
+  onUpdateProgram,
+  onDeleteProgram,
+}: {
+  hosts: HostRecord[]
+  programs: Program[]
+  onAddHost: (hostName: string) => void
+  onCreateProgram: (program: Omit<Program, 'id'>) => void
+  onUpdateProgram: (programId: string, program: Omit<Program, 'id'>) => void
+  onDeleteProgram: (programId: string) => void
+}) {
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingProgramId, setEditingProgramId] = useState<string | null>(null)
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const hostNames = getHostNames(hosts)
+  const [host, setHost] = useState<string[]>(hostNames[0] ? [hostNames[0]] : [])
+
+  const openCreateModal = () => {
+    setEditingProgramId(null)
+    setTitle('')
+    setDescription('')
+    setHost(hostNames[0] ? [hostNames[0]] : [])
+    setIsModalOpen(true)
+  }
+
+  const openEditModal = (program: Program) => {
+    setEditingProgramId(program.id)
+    setTitle(program.title)
+    setDescription(program.description)
+    setHost([program.host])
+    setIsModalOpen(true)
+  }
+
+  const closeModal = () => {
+    setIsModalOpen(false)
+    setEditingProgramId(null)
+    setTitle('')
+    setDescription('')
+    setHost(hostNames[0] ? [hostNames[0]] : [])
+  }
+
+  useEffect(() => {
+    if (isModalOpen || host.length > 0) {
+      return
+    }
+
+    if (hostNames[0]) {
+      setHost([hostNames[0]])
+    }
+  }, [host.length, hostNames, isModalOpen])
+
+  const saveProgram = () => {
+    const normalizedTitle = title.trim()
+    const normalizedDescription = description.trim()
+    const selectedHost = host[0]?.trim()
+
+    if (!normalizedTitle || !selectedHost) {
+      return
+    }
+
+    const programInput = {
+      title: normalizedTitle,
+      description: normalizedDescription,
+      host: selectedHost,
+    }
+
+    if (editingProgramId) {
+      onUpdateProgram(editingProgramId, programInput)
+    } else {
+      onCreateProgram(programInput)
+    }
+
+    closeModal()
+  }
+
+  return (
+    <section className="library-view" aria-label="Programs">
+      <div className="library-header">
+        <div>
+          <BookOpen aria-hidden="true" size={18} strokeWidth={1.8} />
+          <strong>Programs</strong>
+        </div>
+        <button type="button" onClick={openCreateModal}>
+          <Plus aria-hidden="true" size={15} strokeWidth={1.8} />
+          New program
+        </button>
+      </div>
+      {isModalOpen ? (
+        <Modal title={editingProgramId ? 'Edit program' : 'New program'} onClose={closeModal}>
+          <form
+            className="program-create-form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              saveProgram()
+            }}
+          >
+            <label>
+              <span>Program</span>
+              <input value={title} onChange={(event) => setTitle(event.target.value)} />
+            </label>
+            <label>
+              <span>Description</span>
+              <textarea value={description} onChange={(event) => setDescription(event.target.value)} />
+            </label>
+            <MultiSelect
+              label="Host"
+              multiple={false}
+              options={hostNames}
+              placeholder="Select host"
+              value={host}
+              onChange={setHost}
+              onCreateOption={onAddHost}
+              createPlaceholder="New host name"
+            />
+            <div className="form-actions">
+              <button className="primary-action" type="submit">
+                {editingProgramId ? 'Update program' : 'Save program'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+      <div className="library-list">
+        {programs.map((program) => {
+          const hostRecord = findHost(hosts, program.host)
+
+          return (
+          <article className="library-row program-row" key={program.id}>
+            <div className="program-row-body">
+              <HostAvatar colorId={hostRecord?.colorId} name={program.host} title={program.host} />
+              <div className="program-row-copy">
+                <strong>{program.title}</strong>
+                <p className="program-row-meta">
+                  <span className="program-row-host">{program.host}</span>
+                  {program.description ? (
+                    <>
+                      <span className="program-row-meta-sep" aria-hidden="true">
+                        ·
+                      </span>
+                      <span className="program-row-description">{program.description}</span>
+                    </>
+                  ) : null}
+                </p>
+              </div>
+            </div>
+            <div className="library-actions">
+              <button type="button" onClick={() => openEditModal(program)} aria-label={`Edit ${program.title}`}>
+                <Settings aria-hidden="true" size={14} strokeWidth={1.8} />
+              </button>
+              <button type="button" onClick={() => onDeleteProgram(program.id)} aria-label={`Delete ${program.title}`}>
+                <Trash2 aria-hidden="true" size={14} strokeWidth={1.8} />
+              </button>
+            </div>
+          </article>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+function MediaPage({
+  filter,
+  mediaItems,
+  onChangeFilter,
+  onDeleteMedia,
+  onUploadMedia,
+}: {
+  filter: 'all' | MediaItem['type']
+  mediaItems: MediaItem[]
+  onChangeFilter: (filter: 'all' | MediaItem['type']) => void
+  onDeleteMedia: (mediaId: string) => void
+  onUploadMedia: (file: File) => Promise<void>
+}) {
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [error, setError] = useState('')
+  const [isUploading, setIsUploading] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const visibleItems = mediaItems.filter((item) => filter === 'all' || item.type === filter)
+
+  const uploadMedia = async () => {
+    if (!selectedFile) {
+      return
+    }
+
+    setError('')
+    setIsUploading(true)
+
+    try {
+      await onUploadMedia(selectedFile)
+      setSelectedFile(null)
+      setIsModalOpen(false)
+    } catch {
+      setError('Upload failed. Please try again.')
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  return (
+    <section className="library-view" aria-label="Media">
+      <div className="library-header">
+        <div>
+          <ListMusic aria-hidden="true" size={18} strokeWidth={1.8} />
+          <strong>Media</strong>
+        </div>
+        <button type="button" onClick={() => setIsModalOpen(true)}>
+          <Plus aria-hidden="true" size={15} strokeWidth={1.8} />
+          Upload media
+        </button>
+      </div>
+      <div className="library-tabs" aria-label="Media type">
+        <button className={filter === 'all' ? 'is-active' : ''} type="button" onClick={() => onChangeFilter('all')}>
+          All
+        </button>
+        <button className={filter === 'audio' ? 'is-active' : ''} type="button" onClick={() => onChangeFilter('audio')}>
+          Audio
+        </button>
+        <button className={filter === 'image' ? 'is-active' : ''} type="button" onClick={() => onChangeFilter('image')}>
+          Images
+        </button>
+      </div>
+      {isModalOpen ? (
+        <Modal
+          title="Upload media"
+          onClose={() => {
+            setIsModalOpen(false)
+            setSelectedFile(null)
+            setError('')
+          }}
+        >
+          <form
+            className="media-upload-form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              uploadMedia()
+            }}
+          >
+            <FileUploadField
+              accept="audio/*,image/*"
+              emptyLabel="Choose audio or image"
+              file={selectedFile}
+              label="Media file"
+              onChange={(nextFile) => {
+                setError('')
+                setSelectedFile(nextFile)
+              }}
+            />
+            {error ? <p className="form-error">{error}</p> : null}
+            <div className="form-actions">
+              <button className="primary-action" disabled={!selectedFile || isUploading} type="submit">
+                {isUploading ? 'Uploading' : 'Upload'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+      <div className="library-list">
+        {visibleItems.length === 0 ? <p className="library-empty">No media uploaded</p> : null}
+        {visibleItems.map((item) => (
+          <article className="library-row media-row" key={item.id}>
+            <div className="media-row-body">
+              <MediaPreviewThumb apiBaseUrl={apiBaseUrl} name={item.name} type={item.type} url={item.url} />
+              <div className="media-row-copy">
+                <strong>{item.name}</strong>
+                <span>
+                  {item.type} · {formatUploadTime(item.uploadedAt)} · {formatFileSize(item.size)}
+                </span>
+              </div>
+            </div>
+            <div className="library-actions">
+              <button type="button" onClick={() => onDeleteMedia(item.id)} aria-label={`Delete ${item.name}`}>
+                <Trash2 aria-hidden="true" size={14} strokeWidth={1.8} />
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function BroadcastPage({ station }: { station: StationSummary }) {
+  const [isConnected, setIsConnected] = useState(false)
+  const mount = station.mount.replace(/^\//, '')
+
+  return (
+    <section className="broadcast-view" aria-label="Broadcast">
+      <div className="library-header">
+        <div>
+          <Radio aria-hidden="true" size={18} strokeWidth={1.8} />
+          <strong>Broadcast</strong>
+        </div>
+      </div>
+      <div className="broadcast-console">
+        <section className="broadcast-status-panel" aria-label="Broadcast source status">
+          <div className={isConnected ? 'source-light is-on' : 'source-light'} aria-hidden="true" />
+          <div>
+            <strong>{isConnected ? 'Source connected' : 'Waiting for source'}</strong>
+            <span>{isConnected ? 'BUTT is connected to the station input.' : 'Connect BUTT with the settings below.'}</span>
+          </div>
+          <label className="connection-toggle">
+            <input checked={isConnected} type="checkbox" onChange={(event) => setIsConnected(event.target.checked)} />
+            <span>Connection test</span>
+          </label>
+        </section>
+        <section className="broadcast-settings" aria-label="BUTT settings">
+          <div className="settings-list">
+            <SettingsRow label="Application" value="BUTT" />
+            <SettingsRow label="Server type" value="Icecast" />
+            <SettingsRow label="Address" value="localhost" />
+            <SettingsRow label="Port" value="8000" />
+            <SettingsRow label="Password" value="sourcepass" />
+            <SettingsRow label="Mount" value={mount} />
+            <SettingsRow label="Station name" value={station.name} />
+            <SettingsRow label="Public stream" value={station.streamUrl} />
+          </div>
+        </section>
+      </div>
     </section>
   )
 }
@@ -379,122 +1769,37 @@ function StationSettings({ station }: { station: StationSummary }) {
 
   return (
     <section className="settings-view" aria-label={`${station.name} settings`}>
-      <div className="section-title settings-title">
-        <span>Station</span>
-        <strong>Settings</strong>
+      <div className="settings-list">
+        <SettingsRow label="Name" value={station.name} />
+        <SettingsRow label="Station ID" value={station.id} />
+        <SettingsRow label="Slug" value={station.slug} />
+        <SettingsRow label="Timezone" value={station.timezone} />
+        <SettingsRow label="Mount" value={station.mount} />
+        <SettingsRow label="Stream URL" value={station.streamUrl} />
+        <SettingsRow label="Fallback type" value={station.fallbackSource.kind} />
+        <SettingsRow label="Fallback source" value={fallbackDetail} />
+        <SettingsLink label="API" href={apiBaseUrl} />
+        <SettingsLink label="Icecast" href="http://localhost:8000" />
       </div>
-      <form className="settings-form">
-        <label>
-          <span>Name</span>
-          <input readOnly value={station.name} />
-        </label>
-        <label>
-          <span>Station ID</span>
-          <input readOnly value={station.id} />
-        </label>
-        <label>
-          <span>Slug</span>
-          <input readOnly value={station.slug} />
-        </label>
-        <label>
-          <span>Timezone</span>
-          <input readOnly value={station.timezone} />
-        </label>
-        <label>
-          <span>Mount</span>
-          <input readOnly value={station.mount} />
-        </label>
-        <label>
-          <span>Stream URL</span>
-          <input readOnly value={station.streamUrl} />
-        </label>
-        <label>
-          <span>Fallback type</span>
-          <input readOnly value={station.fallbackSource.kind} />
-        </label>
-        <label>
-          <span>Fallback source</span>
-          <input readOnly value={fallbackDetail} />
-        </label>
-      </form>
     </section>
   )
 }
 
-function DayPrograms({
-  day,
-  programs,
-  selectedProgramId,
-  dragOverProgramId,
-  onAddProgram,
-  onSelectProgram,
-  onDragProgram,
-  onDragOverProgram,
-  onDropProgram,
-  onEndDrag,
-}: {
-  day: Date
-  programs: ProgramBlock[]
-  selectedProgramId: string | null
-  dragOverProgramId: string | null
-  onAddProgram: () => void
-  onSelectProgram: (programId: string) => void
-  onDragProgram: (programId: string) => void
-  onDragOverProgram: (programId: string | null) => void
-  onDropProgram: (programId: string | null) => void
-  onEndDrag: () => void
-}) {
+function SettingsRow({ label, value }: { label: string; value: string }) {
   return (
-    <section
-      className="program-panel"
-      aria-label={`${formatDayLabel(day)} programs`}
-      onDragOver={(event) => {
-        event.preventDefault()
-        onDragOverProgram(null)
-      }}
-      onDrop={() => onDropProgram(null)}
-    >
-      {programs.length === 0 ? <p className="program-empty">No programs scheduled</p> : null}
+    <div className="settings-row">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  )
+}
 
-      {programs.map((program) => (
-        <article
-          className={[
-            'program-block',
-            selectedProgramId === program.id ? 'is-active' : '',
-            dragOverProgramId === program.id ? 'is-drop-target' : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          draggable
-          key={program.id}
-          onClick={() => onSelectProgram(program.id)}
-          onDragStart={(event) => {
-            event.dataTransfer.effectAllowed = 'move'
-            onDragProgram(program.id)
-          }}
-          onDragOver={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            onDragOverProgram(program.id)
-          }}
-          onDrop={(event) => {
-            event.stopPropagation()
-            onDropProgram(program.id)
-          }}
-          onDragEnd={onEndDrag}
-        >
-          <button className="program-handle" type="button" aria-label="Drag program">
-            <GripVertical aria-hidden="true" size={16} strokeWidth={1.8} />
-          </button>
-          <span>{program.title}</span>
-        </article>
-      ))}
-
-      <button className="add-program" type="button" onClick={onAddProgram}>
-        <Plus aria-hidden="true" size={15} strokeWidth={1.8} />
-        <span>Add program</span>
-      </button>
-    </section>
+function SettingsLink({ href, label }: { href: string; label: string }) {
+  return (
+    <a className="settings-row settings-link" href={href}>
+      <span>{label}</span>
+      <strong>{href}</strong>
+    </a>
   )
 }
 

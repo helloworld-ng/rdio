@@ -3,6 +3,8 @@ dist
 .turbo
 .env
 .env.local
-media/uploads
+media/uploads/*
+!media/uploads/.gitignore
+!media/uploads/.gitkeep
 *.log
 DS_Store
