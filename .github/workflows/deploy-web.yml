@@ -17,7 +17,7 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
       - run: |
-          fly deploy -c apps/web/fly.toml \
+          flyctl deploy -c apps/web/fly.toml \
             --build-arg VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }} \
             --build-arg VITE_API_KEY=${{ secrets.VITE_API_KEY }}
         env:
