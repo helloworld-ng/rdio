@@ -48,6 +48,9 @@ interface IcecastSettings {
   host: string
   port: number
   mount: string
+}
+
+interface BroadcastIcecastSettings extends IcecastSettings {
   sourcePassword: string
 }
 
@@ -88,6 +91,12 @@ interface MediaResponse {
 
 interface ScheduleBlocksResponse {
   blocks: ScheduleBlock[]
+  version: string
+}
+
+interface ScheduleMutationResponse {
+  blocks?: ScheduleBlock[]
+  version?: string
 }
 
 interface Program {
@@ -314,6 +323,16 @@ function canPlaceBlockAt(
   })
 }
 
+function blockConflictsWith(blocks: ScheduleBlock[], movingBlockId: string, nextBlock: Pick<ScheduleBlock, 'dateKey' | 'startMinutes' | 'endMinutes'>) {
+  return blocks.some((block) => {
+    if (block.id === movingBlockId || block.dateKey !== nextBlock.dateKey) {
+      return false
+    }
+
+    return timeRangesOverlap(nextBlock.startMinutes, nextBlock.endMinutes, block.startMinutes, block.endMinutes)
+  })
+}
+
 function buildDragDropPreview(
   blocks: ScheduleBlock[],
   draggedBlockId: string,
@@ -390,6 +409,9 @@ function App() {
   )
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([])
   const [isScheduleLoaded, setIsScheduleLoaded] = useState(false)
+  const [scheduleSaveError, setScheduleSaveError] = useState('')
+  const [scheduleSaveState, setScheduleSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const scheduleVersionRef = useRef<string | null>(null)
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
   const [mediaFilter, setMediaFilter] = useState<'all' | MediaItem['type']>('all')
   const [hosts, setHosts] = useState<HostRecord[]>([])
@@ -477,7 +499,9 @@ function App() {
 
         if (!ignore) {
           setBlocks(data.blocks)
+          scheduleVersionRef.current = data.version
           setIsScheduleLoaded(true)
+          setScheduleSaveError('')
         }
       } catch {
         if (!ignore) {
@@ -528,13 +552,40 @@ function App() {
     }
 
     const timeout = window.setTimeout(() => {
-      void apiFetch(`${apiBaseUrl}/schedule-blocks`, {
-        body: JSON.stringify({ blocks }),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        method: 'PUT',
-      })
+      setScheduleSaveState('saving')
+      void (async () => {
+        try {
+          const response = await apiFetch(`${apiBaseUrl}/schedule-blocks`, {
+            body: JSON.stringify({ blocks, version: scheduleVersionRef.current }),
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            method: 'PUT',
+          })
+          const data = (await response.json()) as Partial<ScheduleBlocksResponse> & { error?: string }
+
+          if (!response.ok) {
+            if (response.status === 409 && Array.isArray(data.blocks) && typeof data.version === 'string') {
+              setBlocks(data.blocks)
+              scheduleVersionRef.current = data.version
+            }
+
+            setScheduleSaveState('idle')
+            setScheduleSaveError(data.error ?? 'Could not save schedule changes.')
+            return
+          }
+
+          if (typeof data.version === 'string') {
+            scheduleVersionRef.current = data.version
+          }
+
+          setScheduleSaveState('saved')
+          setScheduleSaveError('')
+        } catch {
+          setScheduleSaveState('idle')
+          setScheduleSaveError('Could not save schedule changes.')
+        }
+      })()
     }, 250)
 
     return () => window.clearTimeout(timeout)
@@ -635,13 +686,41 @@ function App() {
       dateKey: request.dateKey,
     }
 
-    setBlocks((current) => [...current, nextBlock])
-    setSelectedBlockId(nextBlock.id)
-    setCreationRequest(null)
+    let didSave = false
+    setBlocks((current) => {
+      if (blockConflictsWith(current, nextBlock.id, nextBlock)) {
+        setScheduleSaveError('Schedule blocks cannot overlap.')
+        return current
+      }
+
+      setScheduleSaveError('')
+      setScheduleSaveState('idle')
+      didSave = true
+      return [...current, nextBlock]
+    })
+
+    if (didSave) {
+      setSelectedBlockId(nextBlock.id)
+      setCreationRequest(null)
+    }
   }
 
   const updateBlock = (blockId: string, blockInput: ScheduleBlockDraft) => {
-    setBlocks((current) => current.map((block) => (block.id === blockId ? { ...block, ...blockInput } : block)))
+    setBlocks((current) => current.map((block) => {
+      if (block.id !== blockId) {
+        return block
+      }
+
+      const nextBlock = { ...block, ...blockInput }
+      if (blockConflictsWith(current, blockId, nextBlock)) {
+        setScheduleSaveError('Schedule blocks cannot overlap.')
+        return block
+      }
+
+      setScheduleSaveError('')
+      setScheduleSaveState('idle')
+      return nextBlock
+    }))
     setSelectedBlockId(blockId)
   }
 
@@ -663,12 +742,23 @@ function App() {
         endMinutes: startMinutes + duration,
       }
 
+      if (blockConflictsWith(current, nextBlock.id, nextBlock)) {
+        setScheduleSaveError('The duplicate overlaps another schedule block.')
+        return current
+      }
+
+      setScheduleSaveError('')
+      setScheduleSaveState('idle')
       return [...current, nextBlock]
     })
   }
 
   const removeBlock = (blockId: string) => {
-    setBlocks((current) => current.filter((block) => block.id !== blockId))
+    setBlocks((current) => {
+      setScheduleSaveError('')
+      setScheduleSaveState('idle')
+      return current.filter((block) => block.id !== blockId)
+    })
     setSelectedBlockId((current) => (current === blockId ? null : current))
   }
 
@@ -683,10 +773,17 @@ function App() {
       const duration = Math.max(30, movingBlock.endMinutes - movingBlock.startMinutes)
       const nextStartMinutes = clampBlockStart(startMinutes, duration)
 
-      if (!canPlaceBlockAt(current, blockId, nextStartMinutes, duration)) {
+      if (blockConflictsWith(current, blockId, {
+        dateKey: selectedDateKey,
+        startMinutes: nextStartMinutes,
+        endMinutes: nextStartMinutes + duration,
+      })) {
+        setScheduleSaveError('Schedule blocks cannot overlap.')
         return current
       }
 
+      setScheduleSaveError('')
+      setScheduleSaveState('idle')
       return current.map((block) => {
         if (block.id !== blockId) {
           return block
@@ -742,7 +839,27 @@ function App() {
     return data.media
   }
 
+  const applyScheduleMutation = (data: ScheduleMutationResponse) => {
+    if (Array.isArray(data.blocks)) {
+      setBlocks(data.blocks)
+    }
+
+    if (typeof data.version === 'string') {
+      scheduleVersionRef.current = data.version
+    }
+
+    setScheduleSaveError('')
+  }
+
   const deleteMedia = async (mediaId: string) => {
+    const scheduledUseCount = blocks.filter((block) => block.mediaId === mediaId).length
+    if (
+      scheduledUseCount > 0 &&
+      !window.confirm(`This media file is used by ${scheduledUseCount} schedule slot${scheduledUseCount === 1 ? '' : 's'}. Delete it and clear those slots?`)
+    ) {
+      return
+    }
+
     const response = await apiFetch(`${apiBaseUrl}/media/${encodeURIComponent(mediaId)}`, {
       method: 'DELETE',
     })
@@ -751,7 +868,9 @@ function App() {
       throw new Error(`Delete failed with ${response.status}`)
     }
 
+    const data = (await response.json()) as ScheduleMutationResponse
     setMediaItems((current) => current.filter((item) => item.id !== mediaId))
+    applyScheduleMutation(data)
   }
 
   return (
@@ -801,6 +920,8 @@ function App() {
                 isDatePickerOpen={isDatePickerOpen}
                 mediaItems={mediaItems}
                 programs={programs}
+                saveError={scheduleSaveError}
+                saveState={scheduleSaveState}
                 selectedBlockId={selectedBlockId}
                 selectedDate={selectedDate}
                 selectedDateKey={selectedDateKey}
@@ -843,11 +964,19 @@ function App() {
                 }}
                 onUpdateProgram={async (programId, program) => {
                   const res = await apiFetch(`${apiBaseUrl}/programs/${programId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(program) })
-                  if (res.ok) setPrograms((current) => current.map((item) => (item.id === programId ? { ...item, ...program } : item)))
+                  if (res.ok) {
+                    const data = (await res.json()) as { program: Program } & ScheduleMutationResponse
+                    setPrograms((current) => current.map((item) => (item.id === programId ? data.program : item)))
+                    applyScheduleMutation(data)
+                  }
                 }}
                 onDeleteProgram={async (programId) => {
                   const res = await apiFetch(`${apiBaseUrl}/programs/${programId}`, { method: 'DELETE' })
-                  if (res.ok) setPrograms((current) => current.filter((item) => item.id !== programId))
+                  if (res.ok) {
+                    const data = (await res.json()) as ScheduleMutationResponse
+                    setPrograms((current) => current.filter((item) => item.id !== programId))
+                    applyScheduleMutation(data)
+                  }
                 }}
               />
             ) : activeView === 'hosts' ? (
@@ -864,10 +993,11 @@ function App() {
                 onUpdateHost={async (hostName, host) => {
                   const res = await apiFetch(`${apiBaseUrl}/hosts/${encodeURIComponent(hostName)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(host) })
                   if (res.ok) {
+                    const data = (await res.json()) as { host: HostRecord } & ScheduleMutationResponse
                     setHosts((current) => current.map((item) => (item.name === hostName ? host : item)))
                     if (hostName !== host.name) {
                       setPrograms((current) => current.map((item) => (item.host === hostName ? { ...item, host: host.name } : item)))
-                      setBlocks((current) => current.map((item) => ({ ...item, hosts: item.hosts.map((entry) => (entry === hostName ? host.name : entry)) })))
+                      applyScheduleMutation(data)
                     }
                   }
                 }}
@@ -1115,6 +1245,8 @@ function DailyCalendar({
   isMobileLayout,
   mediaItems,
   programs,
+  saveError,
+  saveState,
   selectedBlockId,
   selectedDate,
   selectedDateKey,
@@ -1147,6 +1279,8 @@ function DailyCalendar({
   isMobileLayout: boolean
   mediaItems: MediaItem[]
   programs: Program[]
+  saveError: string
+  saveState: 'idle' | 'saving' | 'saved'
   selectedBlockId: string | null
   selectedDate: Date
   selectedDateKey: string
@@ -1273,6 +1407,11 @@ function DailyCalendar({
             <ChevronRight aria-hidden="true" size={18} strokeWidth={1.8} />
           </button>
         </div>
+        {saveError ? (
+          <p className="schedule-save-message is-error">{saveError}</p>
+        ) : saveState !== 'idle' ? (
+          <p className="schedule-save-message">{saveState === 'saving' ? 'Saving schedule...' : 'Schedule saved'}</p>
+        ) : null}
       </div>
 
       <div className="daily-grid" ref={gridRef} aria-label={`${formatDayTitle(selectedDate)} schedule`}>
@@ -2101,7 +2240,7 @@ function MediaPage({
   filter: 'all' | MediaItem['type']
   mediaItems: MediaItem[]
   onChangeFilter: (filter: 'all' | MediaItem['type']) => void
-  onDeleteMedia: (mediaId: string) => void
+  onDeleteMedia: (mediaId: string) => Promise<void>
   onUploadMedia: (file: File) => Promise<MediaItem>
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -2152,6 +2291,7 @@ function MediaPage({
           Images
         </button>
       </div>
+      {!isModalOpen && error ? <p className="form-error">{error}</p> : null}
       {isModalOpen ? (
         <Modal
           title="Upload media"
@@ -2201,7 +2341,14 @@ function MediaPage({
               </div>
             </div>
             <div className="library-actions">
-              <button type="button" onClick={() => onDeleteMedia(item.id)} aria-label={`Delete ${item.name}`}>
+              <button
+                type="button"
+                onClick={() => {
+                  setError('')
+                  void onDeleteMedia(item.id).catch(() => setError('Delete failed. Please try again.'))
+                }}
+                aria-label={`Delete ${item.name}`}
+              >
                 <Trash2 aria-hidden="true" size={14} strokeWidth={1.8} />
               </button>
             </div>
@@ -2214,7 +2361,9 @@ function MediaPage({
 
 function BroadcastPage({ station }: { station: StationSummary }) {
   const [isConnected, setIsConnected] = useState(false)
-  const { broadcastIcecast: icecast } = station
+  const [broadcastSettings, setBroadcastSettings] = useState<BroadcastIcecastSettings | null>(null)
+  const [settingsError, setSettingsError] = useState('')
+  const icecast = broadcastSettings ?? station.broadcastIcecast
   const mount = icecast.mount.replace(/^\//, '')
 
   useEffect(() => {
@@ -2231,6 +2380,35 @@ function BroadcastPage({ station }: { station: StationSummary }) {
     }
     void poll()
     return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadBroadcastSettings() {
+      try {
+        const res = await apiFetch(`${apiBaseUrl}/broadcast/settings`)
+        if (!res.ok) {
+          throw new Error(`Broadcast settings request failed with ${res.status}`)
+        }
+        const data = (await res.json()) as { broadcastIcecast: BroadcastIcecastSettings }
+
+        if (!cancelled) {
+          setBroadcastSettings(data.broadcastIcecast)
+          setSettingsError('')
+        }
+      } catch {
+        if (!cancelled) {
+          setSettingsError('Broadcast credentials are unavailable.')
+        }
+      }
+    }
+
+    void loadBroadcastSettings()
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   return (
@@ -2250,13 +2428,14 @@ function BroadcastPage({ station }: { station: StationSummary }) {
           </div>
         </section>
         <section className="broadcast-settings" aria-label="BUTT settings">
+          {settingsError ? <p className="form-error">{settingsError}</p> : null}
           <div className="settings-list">
             <SettingsRow label="Application" value="BUTT" />
             <SettingsRow label="Server type" value="Icecast" />
             <SettingsRow label="Address" value={icecast.host} />
             <SettingsRow label="Port" value={String(icecast.port)} />
             <SettingsRow label="User" value="source" />
-            <SettingsRow label="Password" value={icecast.sourcePassword} />
+            <SettingsRow label="Password" value={broadcastSettings?.sourcePassword ?? 'Requires API key'} />
             <SettingsRow label="Mount" value={mount} />
             <SettingsRow label="Station name" value={station.name} />
             <SettingsRow label="Public stream" value={station.streamUrl} />

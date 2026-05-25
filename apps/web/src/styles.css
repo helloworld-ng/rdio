@@ -456,6 +456,19 @@ button {
   z-index: 5;
 }
 
+.schedule-save-message {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+  margin: -4px 0 4px;
+  padding: 0 50px;
+}
+
+.schedule-save-message.is-error {
+  color: #b44132;
+  font-weight: 700;
+}
+
 .day-toggle {
   align-items: center;
   display: grid;

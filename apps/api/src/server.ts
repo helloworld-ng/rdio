@@ -5,7 +5,7 @@ import { request as httpRequest } from 'node:http'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
-import { findStation, getStationScheduleSnapshot, type RadioStation } from '@rdio/rdio-core'
+import { findStation, type RadioStation } from '@rdio/rdio-core'
 import { defaultStationId, stations } from './stations.js'
 
 const server = Fastify({ bodyLimit: 100 * 1024 * 1024, logger: true })
@@ -24,6 +24,29 @@ const allowedOrigins = (process.env.WEB_ORIGIN ?? 'http://localhost:5173')
   .filter(Boolean)
 const apiKey = process.env.API_KEY
 
+function isPublicRequest(method: string, url: string) {
+  if (method === 'OPTIONS' || method === 'HEAD') {
+    return true
+  }
+
+  if (method !== 'GET') {
+    return false
+  }
+
+  const pathname = url.split('?')[0]
+
+  return (
+    pathname === '/health' ||
+    pathname === '/station' ||
+    pathname === '/schedule' ||
+    pathname === '/now-playing' ||
+    pathname === '/rdio.mp3' ||
+    pathname === '/broadcast/status' ||
+    /^\/schedule-blocks\/\d{4}-\d{2}-\d{2}$/.test(pathname) ||
+    /^\/media\/[^/]+$/.test(pathname)
+  )
+}
+
 server.addHook('onRequest', async (request, reply) => {
   const origin = request.headers.origin ?? ''
   const isLocalhost = /^https?:\/\/localhost(:\d+)?$/.test(origin)
@@ -34,7 +57,7 @@ server.addHook('onRequest', async (request, reply) => {
 })
 
 server.addHook('preHandler', async (request, reply) => {
-  if (!apiKey || request.method === 'GET' || request.method === 'OPTIONS' || request.method === 'HEAD') {
+  if (!apiKey || isPublicRequest(request.method, request.url)) {
     return
   }
 
@@ -95,6 +118,13 @@ interface HostRecord {
   colorId: string
 }
 
+interface ScheduleBlockConflict {
+  firstBlockId: string
+  secondBlockId: string
+  dateKey: string
+  reason: 'overlap'
+}
+
 function sanitizeFileName(fileName: string) {
   return path.basename(fileName).replaceAll(/[^a-zA-Z0-9._ -]/g, '_').trim() || 'upload'
 }
@@ -138,6 +168,18 @@ function parseJsonBody(body: unknown) {
   }
 
   return body
+}
+
+function isAuthorized(request: { headers: { authorization?: string } }) {
+  return !apiKey || request.headers.authorization === `Bearer ${apiKey}`
+}
+
+function requireAdmin(request: { headers: { authorization?: string } }, reply: { status: (code: number) => { send: (body: unknown) => unknown } }) {
+  if (isAuthorized(request)) {
+    return null
+  }
+
+  return reply.status(401).send({ error: 'Unauthorized' })
 }
 
 function normalizeUploadedFile(input: unknown): UploadedFileSummary | undefined {
@@ -213,6 +255,49 @@ async function readAllScheduleBlocks(): Promise<ScheduleBlock[]> {
   return perDay.flat()
 }
 
+async function scheduleVersion() {
+  await mkdir(scheduleDirectory, { recursive: true })
+  const files = (await readdir(scheduleDirectory)).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f))
+
+  if (files.length === 0) {
+    return '0'
+  }
+
+  const stats = await Promise.all(files.map((file) => stat(path.join(scheduleDirectory, file))))
+  return String(Math.max(...stats.map((entry) => entry.mtimeMs)))
+}
+
+function detectBlockConflicts(blocks: ScheduleBlock[]): ScheduleBlockConflict[] {
+  const conflicts: ScheduleBlockConflict[] = []
+  const byDay = new Map<string, ScheduleBlock[]>()
+
+  for (const block of blocks) {
+    const dayBlocks = byDay.get(block.dateKey) ?? []
+    dayBlocks.push(block)
+    byDay.set(block.dateKey, dayBlocks)
+  }
+
+  for (const [dateKey, dayBlocks] of byDay) {
+    const sorted = [...dayBlocks].sort((a, b) => a.startMinutes - b.startMinutes)
+
+    for (let index = 1; index < sorted.length; index += 1) {
+      const previous = sorted[index - 1]
+      const current = sorted[index]
+
+      if (previous.endMinutes > current.startMinutes) {
+        conflicts.push({
+          firstBlockId: previous.id,
+          secondBlockId: current.id,
+          dateKey,
+          reason: 'overlap',
+        })
+      }
+    }
+  }
+
+  return conflicts
+}
+
 async function writeAllScheduleBlocks(blocks: ScheduleBlock[]) {
   await mkdir(scheduleDirectory, { recursive: true })
 
@@ -275,6 +360,7 @@ function stationClock(station: RadioStation, at = new Date()) {
     day: '2-digit',
     hour: '2-digit',
     hour12: false,
+    hourCycle: 'h23',
     minute: '2-digit',
     month: '2-digit',
     timeZone: station.timezone,
@@ -315,6 +401,23 @@ function currentBroadcastBlock(blocks: ScheduleBlock[], station: RadioStation) {
         block.endMinutes > minutes,
     )
     .sort((a, b) => a.startMinutes - b.startMinutes)[0]
+}
+
+function currentScheduleBlock(blocks: ScheduleBlock[], station: RadioStation, at = new Date()) {
+  const { dateKey, minutes } = stationClock(station, at)
+
+  return blocks
+    .filter((block) => block.dateKey === dateKey && block.startMinutes <= minutes && block.endMinutes > minutes)
+    .sort((a, b) => a.startMinutes - b.startMinutes)[0] ?? null
+}
+
+function upcomingScheduleBlocks(blocks: ScheduleBlock[], station: RadioStation, at = new Date(), limit = 10) {
+  const { dateKey, minutes } = stationClock(station, at)
+
+  return [...blocks]
+    .filter((block) => block.dateKey > dateKey || (block.dateKey === dateKey && block.startMinutes > minutes))
+    .sort((a, b) => a.dateKey.localeCompare(b.dateKey) || a.startMinutes - b.startMinutes)
+    .slice(0, limit)
 }
 
 async function refreshCurrentPlayout() {
@@ -381,7 +484,6 @@ function icecastSettings(mount: string) {
     host,
     port,
     mount,
-    sourcePassword: process.env.ICECAST_SOURCE_PASSWORD ?? 'sourcepass',
   }
 }
 
@@ -399,6 +501,12 @@ function broadcastIcecastSettings() {
     host,
     port: Number(process.env.ICECAST_PORT ?? 8000),
     mount: '/broadcast.mp3',
+  }
+}
+
+function broadcastIcecastCredentials() {
+  return {
+    ...broadcastIcecastSettings(),
     sourcePassword: process.env.ICECAST_SOURCE_PASSWORD ?? 'sourcepass',
   }
 }
@@ -431,30 +539,39 @@ function defaultStation() {
   return requireStation(defaultStationId)
 }
 
-function scheduleResponse(station: RadioStation) {
-  const snapshot = getStationScheduleSnapshot(station, new Date())
+async function scheduleResponse(station: RadioStation) {
+  const blocks = await readAllScheduleBlocks()
+  const at = new Date()
 
   return {
     station: stationSummary(station),
-    generatedAt: snapshot.generatedAt,
-    programs: station.schedule,
-    currentProgram: snapshot.currentProgram,
-    upcomingPrograms: snapshot.upcomingPrograms,
-    conflicts: snapshot.conflicts,
+    generatedAt: at.toISOString(),
+    blocks,
+    currentProgram: currentScheduleBlock(blocks, station, at),
+    upcomingPrograms: upcomingScheduleBlocks(blocks, station, at),
+    conflicts: detectBlockConflicts(blocks),
   }
 }
 
-function nowPlayingResponse(station: RadioStation) {
-  const snapshot = getStationScheduleSnapshot(station, new Date(), { upcomingLimit: 3 })
+async function nowPlayingResponse(station: RadioStation) {
+  const blocks = await readAllScheduleBlocks()
+  const at = new Date()
+  const currentProgram = currentScheduleBlock(blocks, station, at)
 
   return {
     station: stationSummary(station),
     mount: station.mount,
     streamUrl: station.streamUrl,
-    currentProgram: snapshot.currentProgram,
-    upcomingPrograms: snapshot.upcomingPrograms,
-    source: snapshot.currentProgram?.source ?? station.fallbackSource,
-    generatedAt: snapshot.generatedAt,
+    currentProgram,
+    upcomingPrograms: upcomingScheduleBlocks(blocks, station, at, 3),
+    source: currentProgram
+      ? currentProgram.kind === 'broadcast'
+        ? { kind: 'live', inputId: 'broadcast' }
+        : currentProgram.mediaId
+          ? { kind: 'track', trackId: currentProgram.mediaId }
+          : station.fallbackSource
+      : station.fallbackSource,
+    generatedAt: at.toISOString(),
   }
 }
 
@@ -472,6 +589,15 @@ server.get('/broadcast/status', async () => {
     req.end()
   })
   return { active }
+})
+
+server.get('/broadcast/settings', async (request, reply) => {
+  const unauthorized = requireAdmin(request, reply)
+  if (unauthorized) return unauthorized
+
+  return {
+    broadcastIcecast: broadcastIcecastCredentials(),
+  }
 })
 
 server.get('/rdio.mp3', (request, reply) => {
@@ -500,6 +626,7 @@ server.get('/schedule', async () => scheduleResponse(defaultStation()))
 
 server.get('/schedule-blocks', async () => ({
   blocks: await readAllScheduleBlocks(),
+  version: await scheduleVersion(),
 }))
 
 server.get<{ Params: { day: string } }>('/schedule-blocks/:day', async (request, reply) => {
@@ -507,14 +634,31 @@ server.get<{ Params: { day: string } }>('/schedule-blocks/:day', async (request,
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
     return reply.status(400).send({ error: 'day must be in YYYY-MM-DD format' })
   }
-  return { day, blocks: await readScheduleBlocksForDay(day) }
+  return { day, blocks: await readScheduleBlocksForDay(day), version: await scheduleVersion() }
 })
 
 server.put('/schedule-blocks', async (request, reply) => {
-  const blocks = normalizeScheduleBlocks(parseJsonBody(request.body))
+  const body = parseJsonBody(request.body)
+  const blocks = normalizeScheduleBlocks(body)
+  const expectedVersion = isRecord(body) && typeof body.version === 'string' ? body.version : undefined
+  const currentVersion = await scheduleVersion()
+  const conflicts = detectBlockConflicts(blocks)
+
+  if (expectedVersion && expectedVersion !== currentVersion) {
+    return reply.status(409).send({
+      error: 'Schedule changed on the server. Reload before saving.',
+      blocks: await readAllScheduleBlocks(),
+      version: currentVersion,
+    })
+  }
+
+  if (conflicts.length > 0) {
+    return reply.status(409).send({ error: 'Schedule blocks cannot overlap.', conflicts, version: currentVersion })
+  }
+
   await writeAllScheduleBlocks(blocks)
   await refreshCurrentPlayout()
-  return reply.send({ blocks })
+  return reply.send({ blocks, version: await scheduleVersion() })
 })
 
 // ── Programs ──────────────────────────────────────────────────────────────────
@@ -544,14 +688,24 @@ server.put<{ Params: { id: string } }>('/programs/:id', async (request, reply) =
   const program: Program = { id, title: body.title, description: body.description, host: body.host }
   programs[index] = program
   await writePrograms(programs)
-  return { program }
+  const blocks = await readAllScheduleBlocks()
+  const updatedBlocks = blocks.map((block) =>
+    block.programId === id
+      ? { ...block, title: program.title, description: program.description, hosts: [program.host] }
+      : block,
+  )
+  await writeAllScheduleBlocks(updatedBlocks)
+  return { program, blocks: updatedBlocks, version: await scheduleVersion() }
 })
 
 server.delete<{ Params: { id: string } }>('/programs/:id', async (request, reply) => {
   const { id } = request.params
   const programs = await readPrograms()
   await writePrograms(programs.filter((p) => p.id !== id))
-  return reply.status(204).send()
+  const blocks = await readAllScheduleBlocks()
+  const updatedBlocks = blocks.map((block) => (block.programId === id ? { ...block, programId: undefined } : block))
+  await writeAllScheduleBlocks(updatedBlocks)
+  return { blocks: updatedBlocks, version: await scheduleVersion() }
 })
 
 // ── Hosts ─────────────────────────────────────────────────────────────────────
@@ -594,6 +748,7 @@ server.put<{ Params: { name: string } }>('/hosts/:name', async (request, reply) 
       hosts: b.hosts.map((h) => (h === oldName ? newHost.name : h)),
     }))
     await writeAllScheduleBlocks(renamed)
+    return { host: newHost, blocks: renamed, version: await scheduleVersion() }
   }
 
   return { host: newHost }
@@ -643,10 +798,15 @@ server.post('/media', async (request, reply) => {
 server.delete('/media/:mediaId', async (request, reply) => {
   const { mediaId } = request.params as { mediaId: string }
   const safeMediaId = path.basename(mediaId)
+  const blocks = await readAllScheduleBlocks()
+  const updatedBlocks = blocks.map((block) =>
+    block.mediaId === safeMediaId ? { ...block, mediaId: undefined, file: undefined } : block,
+  )
 
   await rm(path.join(uploadDirectory, safeMediaId), { force: true })
+  await writeAllScheduleBlocks(updatedBlocks)
   await refreshCurrentPlayout()
-  return reply.status(204).send()
+  return { blocks: updatedBlocks, version: await scheduleVersion() }
 })
 
 server.get('/media/:mediaId', async (request, reply) => {
