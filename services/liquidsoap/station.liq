@@ -1,5 +1,6 @@
 set("log.stdout", true)
 set("log.file", false)
+settings.init.allow_root.set(true)
 
 fallback_file = "/media/fallback/v1-tone.mp3"
 default = single(fallback_file)
