@@ -1,6 +1,7 @@
 import Fastify from 'fastify'
 import { createReadStream } from 'node:fs'
 import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { request as httpRequest } from 'node:http'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
@@ -63,7 +64,7 @@ interface UploadedFileSummary {
 
 interface ScheduleBlock {
   id: string
-  kind: 'media' | 'broadcast'
+  kind: 'recording' | 'broadcast'
   title: string
   description: string
   dateKey: string
@@ -139,7 +140,7 @@ function normalizeScheduleBlock(input: unknown): ScheduleBlock | null {
 
   if (
     typeof input.id !== 'string' ||
-    (input.kind !== 'media' && input.kind !== 'broadcast') ||
+    (input.kind !== 'recording' && input.kind !== 'broadcast') ||
     typeof input.title !== 'string' ||
     typeof input.dateKey !== 'string' ||
     typeof input.startMinutes !== 'number' ||
@@ -217,7 +218,7 @@ function currentMediaBlock(blocks: ScheduleBlock[], station: RadioStation) {
   return blocks
     .filter(
       (block) =>
-        block.kind === 'media' &&
+        block.kind === 'recording' &&
         block.mediaId &&
         block.dateKey === dateKey &&
         block.startMinutes <= minutes &&
@@ -339,6 +340,24 @@ function nowPlayingResponse(station: RadioStation) {
 }
 
 server.get('/health', async () => ({ ok: true, service: 'rdio-api' }))
+
+server.get('/rdio.mp3', (request, reply) => {
+  reply.hijack()
+  const proxyReq = httpRequest({ hostname: 'localhost', port: 8001, path: '/rdio.mp3' }, (proxyRes) => {
+    const headers: Record<string, string> = {
+      'Content-Type': proxyRes.headers['content-type'] ?? 'audio/mpeg',
+      'Cache-Control': 'no-cache',
+      'Access-Control-Allow-Origin': '*',
+    }
+    for (const [k, v] of Object.entries(proxyRes.headers)) {
+      if (k.startsWith('icy-') && typeof v === 'string') headers[k] = v
+    }
+    reply.raw.writeHead(proxyRes.statusCode ?? 503, headers)
+    proxyRes.pipe(reply.raw)
+  })
+  proxyReq.on('error', () => { if (!reply.raw.headersSent) reply.raw.writeHead(503); reply.raw.end() })
+  proxyReq.end()
+})
 
 server.get('/station', async () => ({
   station: stationSummary(defaultStation()),

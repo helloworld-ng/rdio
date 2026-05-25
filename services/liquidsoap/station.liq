@@ -4,8 +4,8 @@ settings.init.allow_root.set(true)
 
 fallback_file = "/media/fallback/v1-tone.mp3"
 default = if file.exists(fallback_file) then single(fallback_file) else blank() end
-icecast_host     = environment.get("ICECAST_HOST",            default="icecast")
-icecast_port     = int_of_string(environment.get("ICECAST_PORT",     default="8000"))
+icecast_host     = environment.get("ICECAST_HOST",            default="localhost")
+icecast_port     = int_of_string(environment.get("ICECAST_PORT",     default="8001"))
 icecast_password = environment.get("ICECAST_SOURCE_PASSWORD", default="sourcepass")
 
 def get_scheduled_request() =
