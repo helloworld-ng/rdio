@@ -14,12 +14,13 @@ export function PlayerBar({ channelName, programKind, programName, streamUrl }: 
   const [isPlaying, setIsPlaying] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const [playbackError, setPlaybackError] = useState('')
-  const nowPlayingTitle = programName ? `${channelName} - ${programName}` : channelName
-  const nowPlayingText = isConnecting
-    ? 'Connecting'
-    : playbackError
-      ? `${nowPlayingTitle} - ${playbackError}`
-      : nowPlayingTitle
+  const nowPlayingText = playbackError
+    ? playbackError
+    : isConnecting
+      ? 'Connecting…'
+      : isPlaying && programName
+        ? `${channelName} – ${programName}`
+        : channelName
 
   useEffect(() => {
     const audio = audioRef.current
@@ -98,12 +99,14 @@ export function PlayerBar({ channelName, programKind, programName, streamUrl }: 
         </button>
       </div>
       <div className="now-playing">
-        <ProgramIcon
-          aria-label={programKind === 'broadcast' ? 'Live broadcast' : 'Recording'}
-          className="now-playing-icon"
-          size={14}
-          strokeWidth={1.8}
-        />
+        {!playbackError && !isConnecting && (
+          <ProgramIcon
+            aria-label={programKind === 'broadcast' ? 'Live broadcast' : 'Recording'}
+            className="now-playing-icon"
+            size={14}
+            strokeWidth={1.8}
+          />
+        )}
         <span>{nowPlayingText}</span>
       </div>
       <div className="volume-controls">

@@ -10,4 +10,6 @@ media/schedule/*
 !media/schedule/.gitignore
 !media/schedule/.gitkeep
 *.log
-DS_Store
+.DS_Store
+**/.DS_Store
+media/.DS_Store
