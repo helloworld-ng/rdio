@@ -17,7 +17,7 @@ export interface MockHost {
 
 export interface MockScheduleBlock {
   id: string
-  kind: 'media' | 'broadcast'
+  kind: 'recording' | 'broadcast'
   title: string
   description: string
   dateKey: string

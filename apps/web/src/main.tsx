@@ -28,7 +28,7 @@ import type { HostRecord } from './components/HostsPage'
 import { HostsPage } from './components/HostsPage'
 import { MultiSelect } from './components/MultiSelect'
 import { PlayerBar } from './components/PlayerBar'
-import { mockAnchorDate, mockHosts, mockPrograms } from './data/mockStation'
+import { mockAnchorDate } from './data/mockStation'
 import { formatFileSize } from './utils'
 import './styles.css'
 
@@ -98,7 +98,7 @@ interface Program {
 
 interface ScheduleBlock {
   id: string
-  kind: 'media' | 'broadcast'
+  kind: 'recording' | 'broadcast'
   title: string
   description: string
   dateKey: string
@@ -391,8 +391,8 @@ function App() {
   const [isScheduleLoaded, setIsScheduleLoaded] = useState(false)
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
   const [mediaFilter, setMediaFilter] = useState<'all' | MediaItem['type']>('all')
-  const [hosts, setHosts] = useState(mockHosts)
-  const [programs, setPrograms] = useState<Program[]>(mockPrograms)
+  const [hosts, setHosts] = useState<HostRecord[]>([])
+  const [programs, setPrograms] = useState<Program[]>([])
   const [creationRequest, setCreationRequest] = useState<CreationRequest | null>(null)
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null)
@@ -491,6 +491,34 @@ function App() {
     return () => {
       ignore = true
     }
+  }, [])
+
+  useEffect(() => {
+    let ignore = false
+    async function load() {
+      try {
+        const res = await apiFetch(`${apiBaseUrl}/programs`)
+        if (!res.ok) return
+        const data = (await res.json()) as { programs: Program[] }
+        if (!ignore) setPrograms(data.programs)
+      } catch { /* ignore */ }
+    }
+    void load()
+    return () => { ignore = true }
+  }, [])
+
+  useEffect(() => {
+    let ignore = false
+    async function load() {
+      try {
+        const res = await apiFetch(`${apiBaseUrl}/hosts`)
+        if (!res.ok) return
+        const data = (await res.json()) as { hosts: HostRecord[] }
+        if (!ignore) setHosts(data.hosts)
+      } catch { /* ignore */ }
+    }
+    void load()
+    return () => { ignore = true }
   }, [])
 
   useEffect(() => {
@@ -753,7 +781,6 @@ function App() {
             <AppSidebar
               activeView={activeView}
               isMobileOverlay={isMobileSidebar}
-              stationName={stationName}
               onChangeView={changeView}
             />
           ) : null}
@@ -776,7 +803,12 @@ function App() {
                 selectedBlockId={selectedBlockId}
                 selectedDate={selectedDate}
                 selectedDateKey={selectedDateKey}
-                onAddHost={(hostName) => setHosts((current) => addHostByName(current, hostName))}
+                onAddHost={async (hostName) => {
+                  const host = addHostByName(hosts, hostName)[hosts.length]
+                  if (!host) return
+                  const res = await apiFetch(`${apiBaseUrl}/hosts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(host) })
+                  if (res.ok) setHosts((current) => addHostByName(current, hostName))
+                }}
                 onBeginCreate={beginCreate}
                 onChangeCreationKind={(kind) => setCreationRequest((current) => (current ? { ...current, kind } : current))}
                 onDatePickerMonthChange={setDatePickerMonth}
@@ -798,37 +830,45 @@ function App() {
               <ProgramsPage
                 hosts={hosts}
                 programs={programs}
-                onAddHost={(hostName) => setHosts((current) => addHostByName(current, hostName))}
-                onCreateProgram={(program) => setPrograms((current) => [...current, { ...program, id: crypto.randomUUID() }])}
-                onUpdateProgram={(programId, program) =>
-                  setPrograms((current) =>
-                    current.map((item) => (item.id === programId ? { ...item, ...program } : item)),
-                  )
-                }
-                onDeleteProgram={(programId) =>
-                  setPrograms((current) => current.filter((item) => item.id !== programId))
-                }
+                onAddHost={async (hostName) => {
+                  const host = addHostByName(hosts, hostName)[hosts.length]
+                  if (!host) return
+                  const res = await apiFetch(`${apiBaseUrl}/hosts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(host) })
+                  if (res.ok) setHosts((current) => addHostByName(current, hostName))
+                }}
+                onCreateProgram={async (program) => {
+                  const res = await apiFetch(`${apiBaseUrl}/programs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(program) })
+                  if (res.ok) { const data = (await res.json()) as { program: Program }; setPrograms((current) => [...current, data.program]) }
+                }}
+                onUpdateProgram={async (programId, program) => {
+                  const res = await apiFetch(`${apiBaseUrl}/programs/${programId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(program) })
+                  if (res.ok) setPrograms((current) => current.map((item) => (item.id === programId ? { ...item, ...program } : item)))
+                }}
+                onDeleteProgram={async (programId) => {
+                  const res = await apiFetch(`${apiBaseUrl}/programs/${programId}`, { method: 'DELETE' })
+                  if (res.ok) setPrograms((current) => current.filter((item) => item.id !== programId))
+                }}
               />
             ) : activeView === 'hosts' ? (
               <HostsPage
                 hosts={hosts}
-                onAddHost={(host) =>
-                  setHosts((current) =>
-                    current.some((item) => item.name === host.name) ? current : [...current, host],
-                  )
-                }
-                onRemoveHost={(hostName) => setHosts((current) => current.filter((item) => item.name !== hostName))}
-                onUpdateHost={(hostName, host) => {
-                  setHosts((current) => current.map((item) => (item.name === hostName ? host : item)))
-                  setPrograms((current) =>
-                    current.map((item) => (item.host === hostName ? { ...item, host: host.name } : item)),
-                  )
-                  setBlocks((current) =>
-                    current.map((item) => ({
-                      ...item,
-                      hosts: item.hosts.map((entry) => (entry === hostName ? host.name : entry)),
-                    })),
-                  )
+                onAddHost={async (host) => {
+                  const res = await apiFetch(`${apiBaseUrl}/hosts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(host) })
+                  if (res.ok) setHosts((current) => current.some((item) => item.name === host.name) ? current : [...current, host])
+                }}
+                onRemoveHost={async (hostName) => {
+                  const res = await apiFetch(`${apiBaseUrl}/hosts/${encodeURIComponent(hostName)}`, { method: 'DELETE' })
+                  if (res.ok) setHosts((current) => current.filter((item) => item.name !== hostName))
+                }}
+                onUpdateHost={async (hostName, host) => {
+                  const res = await apiFetch(`${apiBaseUrl}/hosts/${encodeURIComponent(hostName)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(host) })
+                  if (res.ok) {
+                    setHosts((current) => current.map((item) => (item.name === hostName ? host : item)))
+                    if (hostName !== host.name) {
+                      setPrograms((current) => current.map((item) => (item.host === hostName ? { ...item, host: host.name } : item)))
+                      setBlocks((current) => current.map((item) => ({ ...item, hosts: item.hosts.map((entry) => (entry === hostName ? host.name : entry)) })))
+                    }
+                  }
                 }}
               />
             ) : activeView === 'media' ? (
@@ -892,12 +932,10 @@ function PageHeader({
 function AppSidebar({
   activeView,
   isMobileOverlay,
-  stationName,
   onChangeView,
 }: {
   activeView: ViewName
   isMobileOverlay: boolean
-  stationName: string
   onChangeView: (view: ViewName) => void
 }) {
   return (
@@ -911,7 +949,7 @@ function AppSidebar({
         <SidebarButton active={activeView === 'settings'} icon={Settings} label="Settings" onClick={() => onChangeView('settings')} />
       </nav>
       <div className="sidebar-footer">
-        <span className="sidebar-station-name">hello world</span>
+        <span className="sidebar-studio-name">rdio</span>
         <span className="sidebar-copyright">© {new Date().getFullYear()}</span>
       </div>
     </aside>
@@ -1546,7 +1584,7 @@ function CreationPanel({
           <Mic2 aria-hidden="true" size={15} strokeWidth={1.8} />
           Live Broadcast
         </button>
-        <button type="button" onClick={() => onChangeKind('media')}>
+        <button type="button" onClick={() => onChangeKind('recording')}>
           <ListMusic aria-hidden="true" size={15} strokeWidth={1.8} />
           Recording
         </button>
@@ -1561,7 +1599,7 @@ function CreationPanel({
   const showBroadcastProgramDetails = kind === 'broadcast' && (isEditing || Boolean(selectedProgram))
   const showDescriptionField = !isEditing && !selectedProgram
   const mediaSlotMetadata =
-    kind === 'media' && (isEditing || selectedProgram)
+    kind === 'recording' && (isEditing || selectedProgram)
       ? {
           programTitle: isEditing ? editingBlock!.title : selectedProgram!.title,
           description: isEditing ? editingBlock!.description : selectedProgram!.description,
@@ -1572,7 +1610,7 @@ function CreationPanel({
       : undefined
 
   const resolveMediaSelection = async () => {
-    if (kind !== 'media') {
+    if (kind !== 'recording') {
       return { file: undefined, mediaId: undefined }
     }
 
@@ -1702,7 +1740,7 @@ function CreationPanel({
             </div>
           </div>
         ) : null}
-        {kind === 'media' ? (
+        {kind === 'recording' ? (
           <MediaSlotField
             mediaItems={mediaItems}
             selectedMediaId={selectedMediaId}

@@ -3,7 +3,7 @@ import { ListMusic, Mic2, Pause, Play, SkipBack, SkipForward, Volume2 } from 'lu
 
 interface PlayerBarProps {
   channelName: string
-  programKind: 'broadcast' | 'media'
+  programKind: 'broadcast' | 'recording'
   programName?: string
   streamUrl: string
 }

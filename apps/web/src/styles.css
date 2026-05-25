@@ -195,7 +195,7 @@ button {
   min-width: 0;
 }
 
-.sidebar-station-name {
+.sidebar-studio-name {
   color: #8a9599;
   flex: 0 1 auto;
   font-size: 11px;
@@ -2530,7 +2530,7 @@ button {
     width: 100%;
   }
 
-  .sidebar.is-mobile-overlay .sidebar-station-name {
+  .sidebar.is-mobile-overlay .sidebar-studio-name {
     flex: 0 1 auto;
     font-size: 13px;
   }
