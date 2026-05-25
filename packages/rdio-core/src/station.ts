@@ -1,5 +1,5 @@
-import { detectScheduleConflicts, getCurrentProgram, getUpcomingPrograms } from './schedule'
-import type { RadioStation, RadioStationInput, ScheduleSnapshot } from './types'
+import { detectScheduleConflicts, getCurrentProgram, getUpcomingPrograms } from './schedule.js'
+import type { RadioStation, RadioStationInput, ScheduleSnapshot } from './types.js'
 
 export function defineStation(input: RadioStationInput): RadioStation {
   const slug = input.slug ?? input.id

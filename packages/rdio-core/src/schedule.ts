@@ -1,4 +1,4 @@
-import type { ScheduleConflict, ScheduleSlot } from './types'
+import type { ScheduleConflict, ScheduleSlot } from './types.js'
 
 export function getCurrentProgram(slots: ScheduleSlot[], at: Date): ScheduleSlot | null {
   const time = at.getTime()
