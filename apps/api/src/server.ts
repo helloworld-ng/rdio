@@ -324,10 +324,9 @@ async function refreshCurrentPlayout() {
 
   await mkdir(scheduleDirectory, { recursive: true })
 
-  // Broadcast block takes priority — point Liquidsoap at the live Icecast mount
+  // Broadcast block takes priority — write sentinel so Liquidsoap switches to live source
   if (currentBroadcastBlock(todayBlocks, station)) {
-    const icecastPort = process.env.ICECAST_PORT ?? '8001'
-    await writeFile(currentPlayoutFile, `http://localhost:${icecastPort}/broadcast.mp3\n`)
+    await writeFile(currentPlayoutFile, 'broadcast\n')
     return
   }
 
