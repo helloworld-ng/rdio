@@ -16,10 +16,24 @@ const currentPlayoutFile = path.join(scheduleDirectory, 'current.txt')
 const liquidsoapMediaRoot = '/media/uploads'
 const fallbackPlayoutPath = '/media/fallback/v1-tone.mp3'
 
+const webOrigin = process.env.WEB_ORIGIN ?? 'http://localhost:5173'
+const apiKey = process.env.API_KEY
+
 server.addHook('onRequest', async (_request, reply) => {
-  reply.header('Access-Control-Allow-Origin', '*')
+  reply.header('Access-Control-Allow-Origin', webOrigin)
   reply.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
-  reply.header('Access-Control-Allow-Headers', 'Content-Type,X-File-Name')
+  reply.header('Access-Control-Allow-Headers', 'Content-Type,X-File-Name,Authorization')
+})
+
+server.addHook('preHandler', async (request, reply) => {
+  if (!apiKey || request.method === 'GET' || request.method === 'OPTIONS' || request.method === 'HEAD') {
+    return
+  }
+
+  const auth = request.headers.authorization
+  if (auth !== `Bearer ${apiKey}`) {
+    return reply.status(401).send({ error: 'Unauthorized' })
+  }
 })
 
 server.addContentTypeParser('*', { parseAs: 'buffer' }, (_request, body, done) => {
@@ -135,14 +149,17 @@ function normalizeScheduleBlock(input: unknown): ScheduleBlock | null {
     return null
   }
 
+  const startMinutes = Math.max(0, Math.min(1439, Math.round(input.startMinutes)))
+  const endMinutes = Math.max(startMinutes + 1, Math.min(1440, Math.round(input.endMinutes)))
+
   return {
     id: input.id,
     kind: input.kind,
     title: input.title,
     description: typeof input.description === 'string' ? input.description : '',
     dateKey: input.dateKey,
-    startMinutes: Math.max(0, Math.min(1439, Math.round(input.startMinutes))),
-    endMinutes: Math.max(1, Math.min(1439, Math.round(input.endMinutes))),
+    startMinutes,
+    endMinutes,
     hosts: input.hosts.filter((host): host is string => typeof host === 'string'),
     programId: typeof input.programId === 'string' ? input.programId : undefined,
     file: normalizeUploadedFile(input.file),
@@ -246,6 +263,27 @@ async function listMediaFiles(): Promise<MediaFile[]> {
   return mediaFiles.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())
 }
 
+function icecastSettings(mount: string) {
+  const streamBaseUrl = process.env.PUBLIC_STREAM_BASE_URL ?? 'http://localhost:8000'
+  let host = 'localhost'
+  let port = 8000
+
+  try {
+    const url = new URL(streamBaseUrl)
+    host = url.hostname
+    port = Number(url.port) || (url.protocol === 'https:' ? 443 : 80)
+  } catch {
+    // keep defaults
+  }
+
+  return {
+    host,
+    port,
+    mount,
+    sourcePassword: process.env.ICECAST_SOURCE_PASSWORD ?? 'sourcepass',
+  }
+}
+
 function stationSummary(station: RadioStation) {
   return {
     id: station.id,
@@ -255,6 +293,7 @@ function stationSummary(station: RadioStation) {
     mount: station.mount,
     streamUrl: station.streamUrl,
     fallbackSource: station.fallbackSource,
+    icecast: icecastSettings(station.mount),
   }
 }
 

@@ -3,6 +3,7 @@ set("log.file", false)
 
 fallback_file = "/media/fallback/v1-tone.mp3"
 default = single(fallback_file)
+icecast_password = environment.get("ICECAST_SOURCE_PASSWORD", default="sourcepass")
 
 def get_scheduled_request() =
   lines = process.read.lines("cat /media/schedule/current.txt")
@@ -32,7 +33,7 @@ output.icecast(
   %mp3(bitrate = 192),
   host = "icecast",
   port = 8000,
-  password = "sourcepass",
+  password = icecast_password,
   mount = "rdio.mp3",
   name = "rdio",
   description = "Open-source rdio automation",

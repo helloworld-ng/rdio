@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { MediaPreviewThumb } from './MediaPreviewThumb'
 import { MediaSearchSelect } from './MediaSearchSelect'
+import { formatFileSize } from '../utils'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001'
 
@@ -17,18 +18,6 @@ export interface SlotMetadata {
   programTitle: string
   description: string
   author: string
-}
-
-function formatFileSize(bytes: number) {
-  if (bytes < 1024) {
-    return `${bytes} B`
-  }
-
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`
-  }
-
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 function inferUploadType(file: File): 'audio' | 'image' {

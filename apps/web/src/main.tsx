@@ -29,10 +29,27 @@ import { HostsPage } from './components/HostsPage'
 import { MultiSelect } from './components/MultiSelect'
 import { PlayerBar } from './components/PlayerBar'
 import { mockAnchorDate, mockHosts, mockPrograms } from './data/mockStation'
+import { formatFileSize } from './utils'
 import './styles.css'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001'
+const apiKey = import.meta.env.VITE_API_KEY as string | undefined
 const hours = Array.from({ length: 24 }, (_, hour) => hour)
+
+async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers as HeadersInit)
+  if (apiKey) {
+    headers.set('Authorization', `Bearer ${apiKey}`)
+  }
+  return fetch(url, { ...init, headers })
+}
+
+interface IcecastSettings {
+  host: string
+  port: number
+  mount: string
+  sourcePassword: string
+}
 
 interface StationSummary {
   id: string
@@ -42,6 +59,7 @@ interface StationSummary {
   mount: string
   streamUrl: string
   fallbackSource: FallbackSource
+  icecast: IcecastSettings
 }
 
 interface StationResponse {
@@ -214,14 +232,6 @@ function timeInputToMinutes(value: string) {
   return Number(hour) * 60 + Number(minute)
 }
 
-function formatFileSize(bytes: number) {
-  if (bytes < 1024 * 1024) {
-    return `${Math.max(1, Math.round(bytes / 1024))} KB`
-  }
-
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-}
-
 function formatUploadTime(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',
@@ -356,6 +366,7 @@ function readViewName(): ViewName {
 
 function App() {
   const [stations, setStations] = useState<StationSummary[]>([])
+  const [stationLoadFailed, setStationLoadFailed] = useState(false)
   const [activeView, setActiveView] = useState<ViewName>(readViewName)
   const [isSidebarVisible, setIsSidebarVisible] = useState(readInitialSidebarVisible)
   const [isMobileSidebar, setIsMobileSidebar] = useState(
@@ -423,7 +434,7 @@ function App() {
 
     async function loadStation() {
       try {
-        const response = await fetch(`${apiBaseUrl}/station`)
+        const response = await apiFetch(`${apiBaseUrl}/station`)
 
         if (!response.ok) {
           throw new Error(`Station request failed with ${response.status}`)
@@ -433,10 +444,12 @@ function App() {
 
         if (!ignore) {
           setStations([data.station])
+          setStationLoadFailed(false)
         }
       } catch {
         if (!ignore) {
           setStations([])
+          setStationLoadFailed(true)
         }
       }
     }
@@ -453,7 +466,7 @@ function App() {
 
     async function loadScheduleBlocks() {
       try {
-        const response = await fetch(`${apiBaseUrl}/schedule-blocks`)
+        const response = await apiFetch(`${apiBaseUrl}/schedule-blocks`)
 
         if (!response.ok) {
           throw new Error(`Schedule request failed with ${response.status}`)
@@ -486,7 +499,7 @@ function App() {
     }
 
     const timeout = window.setTimeout(() => {
-      void fetch(`${apiBaseUrl}/schedule-blocks`, {
+      void apiFetch(`${apiBaseUrl}/schedule-blocks`, {
         body: JSON.stringify({ blocks }),
         headers: {
           'Content-Type': 'application/json',
@@ -503,7 +516,7 @@ function App() {
 
     async function loadMedia() {
       try {
-        const response = await fetch(`${apiBaseUrl}/media`)
+        const response = await apiFetch(`${apiBaseUrl}/media`)
 
         if (!response.ok) {
           throw new Error(`Media request failed with ${response.status}`)
@@ -682,7 +695,7 @@ function App() {
   }
 
   const uploadMedia = async (file: File): Promise<MediaItem> => {
-    const response = await fetch(`${apiBaseUrl}/media`, {
+    const response = await apiFetch(`${apiBaseUrl}/media`, {
       body: file,
       headers: {
         'Content-Type': file.type || 'application/octet-stream',
@@ -701,7 +714,7 @@ function App() {
   }
 
   const deleteMedia = async (mediaId: string) => {
-    const response = await fetch(`${apiBaseUrl}/media/${encodeURIComponent(mediaId)}`, {
+    const response = await apiFetch(`${apiBaseUrl}/media/${encodeURIComponent(mediaId)}`, {
       method: 'DELETE',
     })
 
@@ -743,7 +756,7 @@ function App() {
           ) : null}
           <div className={currentStation ? 'shell station-shell' : 'shell'}>
             {!currentStation ? (
-              <StationLoading />
+              <StationLoading failed={stationLoadFailed} />
             ) : activeView === 'schedule' ? (
               <DailyCalendar
                 blocks={dayBlocks}
@@ -921,10 +934,10 @@ function SidebarButton({
   )
 }
 
-function StationLoading() {
+function StationLoading({ failed }: { failed: boolean }) {
   return (
     <section className="empty-page" aria-label="Station loading">
-      <p>Loading station</p>
+      <p>{failed ? 'Could not connect to the API. Check that the API server is running.' : 'Loading station…'}</p>
     </section>
   )
 }
@@ -1462,6 +1475,7 @@ function CreationPanel({
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(initialMediaId)
   const [mediaFile, setMediaFile] = useState<File | null>(null)
   const [mediaDuration, setMediaDuration] = useState<number | undefined>(editingBlock?.file?.duration)
+  const [saveError, setSaveError] = useState('')
   const selectedProgram = programs.find((program) => program.id === selectedProgramId)
 
   // Load duration from library item URL when selection changes
@@ -1481,6 +1495,28 @@ function CreationPanel({
     loadAudioDuration(mediaUrl(item.url)).then((d) => { if (!cancelled) setMediaDuration(d) }).catch(() => { if (!cancelled) setMediaDuration(undefined) })
     return () => { cancelled = true }
   }, [selectedMediaId, mediaFile, mediaItems])
+
+  // Load duration from local file when upload selection changes
+  useEffect(() => {
+    if (!mediaFile) {
+      return
+    }
+
+    if (!mediaFile.type.startsWith('audio/')) {
+      setMediaDuration(undefined)
+      return
+    }
+
+    const objectUrl = URL.createObjectURL(mediaFile)
+    let cancelled = false
+
+    loadAudioDuration(objectUrl)
+      .then((d) => { if (!cancelled) setMediaDuration(d) })
+      .catch(() => { if (!cancelled) setMediaDuration(undefined) })
+      .finally(() => URL.revokeObjectURL(objectUrl))
+
+    return () => { cancelled = true }
+  }, [mediaFile])
 
   useEffect(() => {
     if (editingBlock) {
@@ -1518,6 +1554,9 @@ function CreationPanel({
   const kind = request.kind
   const isEditing = Boolean(editingBlock)
   const linkedProgram = editingBlock?.programId ? programs.find((program) => program.id === editingBlock.programId) : undefined
+  const programContext = isEditing ? linkedProgram : selectedProgram
+  const showBroadcastProgramDetails = kind === 'broadcast' && (isEditing || Boolean(selectedProgram))
+  const showDescriptionField = !isEditing && !selectedProgram
   const mediaSlotMetadata =
     kind === 'media' && (isEditing || selectedProgram)
       ? {
@@ -1569,26 +1608,31 @@ function CreationPanel({
       className={[className, 'creation-form'].filter(Boolean).join(' ')}
       onSubmit={(event) => {
         event.preventDefault()
+        setSaveError('')
 
         void (async () => {
-          const startMinutes = timeInputToMinutes(startTime)
-          const rawEndMinutes = timeInputToMinutes(endTime)
-          const endMinutes = rawEndMinutes > startMinutes ? rawEndMinutes : Math.min(1439, startMinutes + 30)
-          const mediaSelection = await resolveMediaSelection()
+          try {
+            const startMinutes = timeInputToMinutes(startTime)
+            const rawEndMinutes = timeInputToMinutes(endTime)
+            const endMinutes = rawEndMinutes > startMinutes ? rawEndMinutes : Math.min(1439, startMinutes + 30)
+            const mediaSelection = await resolveMediaSelection()
 
-          onSave({
-            kind,
-            title: isEditing
-              ? editingBlock!.title
-              : selectedProgram?.title ?? (title.trim() || (kind === 'broadcast' ? 'Live Broadcast' : 'New Recording')),
-            description: isEditing ? editingBlock!.description : selectedProgram?.description ?? description.trim(),
-            startMinutes,
-            endMinutes,
-            hosts: isEditing ? editingBlock!.hosts : selectedProgram ? [selectedProgram.host] : selectedHosts,
-            programId: isEditing ? editingBlock!.programId : selectedProgram?.id,
-            file: mediaSelection.file,
-            mediaId: mediaSelection.mediaId,
-          })
+            onSave({
+              kind,
+              title: isEditing
+                ? editingBlock!.title
+                : selectedProgram?.title ?? (title.trim() || (kind === 'broadcast' ? 'Live Broadcast' : 'New Recording')),
+              description: isEditing ? editingBlock!.description : selectedProgram?.description ?? description.trim(),
+              startMinutes,
+              endMinutes,
+              hosts: isEditing ? editingBlock!.hosts : selectedProgram ? [selectedProgram.host] : selectedHosts,
+              programId: isEditing ? editingBlock!.programId : selectedProgram?.id,
+              file: mediaSelection.file,
+              mediaId: mediaSelection.mediaId,
+            })
+          } catch {
+            setSaveError('Could not save slot. Please try again.')
+          }
         })()
       }}
     >
@@ -1632,21 +1676,25 @@ function CreationPanel({
             <input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
           </label>
         </div>
-        {isEditing && kind === 'broadcast' ? (
+        {showBroadcastProgramDetails ? (
           <div className="slot-program-details">
             <div className="media-slot-divider" role="separator" />
             <div className="media-slot-meta">
               <div className="media-slot-meta-item">
                 <span>Program</span>
-                <p>{editingBlock!.title || '—'}</p>
+                <p>{(isEditing ? editingBlock!.title : programContext!.title) || '—'}</p>
               </div>
               <div className="media-slot-meta-item">
                 <span>Host</span>
-                <p>{editingBlock!.hosts.join(', ') || linkedProgram?.host || '—'}</p>
+                <p>
+                  {isEditing
+                    ? editingBlock!.hosts.join(', ') || programContext!.host || '—'
+                    : programContext!.host || '—'}
+                </p>
               </div>
               <div className="media-slot-meta-item">
                 <span>About</span>
-                <p>{editingBlock!.description || '—'}</p>
+                <p>{(isEditing ? editingBlock!.description : programContext!.description) || '—'}</p>
               </div>
             </div>
           </div>
@@ -1664,26 +1712,17 @@ function CreationPanel({
               if (nextFile && !selectedProgram && (title === 'New Recording' || title.trim() === '')) {
                 setTitle(nextFile.name)
               }
-
-              if (nextFile && nextFile.type.startsWith('audio/')) {
-                const objectUrl = URL.createObjectURL(nextFile)
-                loadAudioDuration(objectUrl)
-                  .then((d) => setMediaDuration(d))
-                  .catch(() => setMediaDuration(undefined))
-                  .finally(() => URL.revokeObjectURL(objectUrl))
-              } else {
-                setMediaDuration(undefined)
-              }
             }}
           />
         ) : null}
-        {!isEditing ? (
+        {showDescriptionField ? (
           <label>
             <span>Description</span>
-            <textarea disabled={selectedProgram !== undefined} value={description} onChange={(event) => setDescription(event.target.value)} />
+            <textarea value={description} onChange={(event) => setDescription(event.target.value)} />
           </label>
         ) : null}
       </div>
+      {saveError ? <p className="form-error">{saveError}</p> : null}
       <div className={['form-actions', 'creation-form-actions', isEditing ? 'form-actions--split' : ''].filter(Boolean).join(' ')}>
         {isEditing && onDelete ? (
           <button className="form-actions-delete" type="button" onClick={onDelete}>
@@ -2133,7 +2172,8 @@ function MediaPage({
 
 function BroadcastPage({ station }: { station: StationSummary }) {
   const [isConnected, setIsConnected] = useState(false)
-  const mount = station.mount.replace(/^\//, '')
+  const { icecast } = station
+  const mount = icecast.mount.replace(/^\//, '')
 
   return (
     <section className="broadcast-view" aria-label="Broadcast">
@@ -2159,9 +2199,9 @@ function BroadcastPage({ station }: { station: StationSummary }) {
           <div className="settings-list">
             <SettingsRow label="Application" value="BUTT" />
             <SettingsRow label="Server type" value="Icecast" />
-            <SettingsRow label="Address" value="localhost" />
-            <SettingsRow label="Port" value="8000" />
-            <SettingsRow label="Password" value="sourcepass" />
+            <SettingsRow label="Address" value={icecast.host} />
+            <SettingsRow label="Port" value={String(icecast.port)} />
+            <SettingsRow label="Password" value={icecast.sourcePassword} />
             <SettingsRow label="Mount" value={mount} />
             <SettingsRow label="Station name" value={station.name} />
             <SettingsRow label="Public stream" value={station.streamUrl} />
@@ -2194,7 +2234,7 @@ function StationSettings({ station }: { station: StationSummary }) {
         <SettingsRow label="Fallback type" value={station.fallbackSource.kind} />
         <SettingsRow label="Fallback source" value={fallbackDetail} />
         <SettingsLink label="API" href={apiBaseUrl} />
-        <SettingsLink label="Icecast" href="http://localhost:8000" />
+        <SettingsLink label="Icecast" href={`http://${station.icecast.host}:${station.icecast.port}`} />
       </div>
     </section>
   )
