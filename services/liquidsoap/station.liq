@@ -37,8 +37,9 @@ output.icecast(
   host = icecast_host,
   port = icecast_port,
   password = icecast_password,
-  mount = "rdio.mp3",
+  mount = "/rdio.mp3",
   name = "rdio",
   description = "Open-source rdio automation",
+  transport = http.transport.ssl,
   rdio
 )
