@@ -461,6 +461,20 @@ function nowPlayingResponse(station: RadioStation) {
 
 server.get('/health', async () => ({ ok: true, service: 'rdio-api' }))
 
+server.get('/broadcast/status', async () => {
+  const icecastPort = Number(process.env.ICECAST_PORT ?? 8001)
+  const active = await new Promise<boolean>((resolve) => {
+    const req = httpRequest(
+      { hostname: 'localhost', port: icecastPort, path: '/broadcast.mp3', method: 'HEAD' },
+      (res) => { resolve(res.statusCode === 200) },
+    )
+    req.on('error', () => resolve(false))
+    req.setTimeout(2000, () => { req.destroy(); resolve(false) })
+    req.end()
+  })
+  return { active }
+})
+
 server.get('/rdio.mp3', (request, reply) => {
   reply.hijack()
   const proxyReq = httpRequest({ hostname: 'localhost', port: 8001, path: '/rdio.mp3' }, (proxyRes) => {

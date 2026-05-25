@@ -2217,6 +2217,22 @@ function BroadcastPage({ station }: { station: StationSummary }) {
   const { broadcastIcecast: icecast } = station
   const mount = icecast.mount.replace(/^\//, '')
 
+  useEffect(() => {
+    let cancelled = false
+    async function poll() {
+      try {
+        const res = await fetch(`${apiBaseUrl}/broadcast/status`)
+        if (!cancelled && res.ok) {
+          const data = (await res.json()) as { active: boolean }
+          setIsConnected(data.active)
+        }
+      } catch { /* ignore */ }
+      if (!cancelled) setTimeout(poll, 3000)
+    }
+    void poll()
+    return () => { cancelled = true }
+  }, [])
+
   return (
     <section className="broadcast-view" aria-label="Broadcast">
       <div className="library-header">
@@ -2232,10 +2248,6 @@ function BroadcastPage({ station }: { station: StationSummary }) {
             <strong>{isConnected ? 'Source connected' : 'Waiting for source'}</strong>
             <span>{isConnected ? 'BUTT is connected to the station input.' : 'Connect BUTT with the settings below.'}</span>
           </div>
-          <label className="connection-toggle">
-            <input checked={isConnected} type="checkbox" onChange={(event) => setIsConnected(event.target.checked)} />
-            <span>Connection test</span>
-          </label>
         </section>
         <section className="broadcast-settings" aria-label="BUTT settings">
           <div className="settings-list">
