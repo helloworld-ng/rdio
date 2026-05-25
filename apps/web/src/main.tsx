@@ -2255,6 +2255,7 @@ function BroadcastPage({ station }: { station: StationSummary }) {
             <SettingsRow label="Server type" value="Icecast" />
             <SettingsRow label="Address" value={icecast.host} />
             <SettingsRow label="Port" value={String(icecast.port)} />
+            <SettingsRow label="User" value="source" />
             <SettingsRow label="Password" value={icecast.sourcePassword} />
             <SettingsRow label="Mount" value={mount} />
             <SettingsRow label="Station name" value={station.name} />
