@@ -303,15 +303,39 @@ function currentMediaBlock(blocks: ScheduleBlock[], station: RadioStation) {
     .sort((a, b) => a.startMinutes - b.startMinutes)[0]
 }
 
+function currentBroadcastBlock(blocks: ScheduleBlock[], station: RadioStation) {
+  const { dateKey, minutes } = stationClock(station)
+
+  return blocks
+    .filter(
+      (block) =>
+        block.kind === 'broadcast' &&
+        block.dateKey === dateKey &&
+        block.startMinutes <= minutes &&
+        block.endMinutes > minutes,
+    )
+    .sort((a, b) => a.startMinutes - b.startMinutes)[0]
+}
+
 async function refreshCurrentPlayout() {
   const station = defaultStation()
   const { dateKey } = stationClock(station)
-  const block = currentMediaBlock(await readScheduleBlocksForDay(dateKey), station)
+  const todayBlocks = await readScheduleBlocksForDay(dateKey)
+
+  await mkdir(scheduleDirectory, { recursive: true })
+
+  // Broadcast block takes priority — point Liquidsoap at the live Icecast mount
+  if (currentBroadcastBlock(todayBlocks, station)) {
+    const icecastPort = process.env.ICECAST_PORT ?? '8001'
+    await writeFile(currentPlayoutFile, `http://localhost:${icecastPort}/broadcast.mp3\n`)
+    return
+  }
+
+  // Otherwise play the scheduled recording file
+  const block = currentMediaBlock(todayBlocks, station)
   const mediaId = block?.mediaId ? path.basename(block.mediaId) : ''
   const hostPath = mediaId ? path.join(uploadDirectory, mediaId) : ''
   const liquidsoapPath = mediaId ? path.posix.join(liquidsoapMediaRoot, mediaId) : ''
-
-  await mkdir(scheduleDirectory, { recursive: true })
 
   try {
     if (hostPath) {
@@ -362,6 +386,24 @@ function icecastSettings(mount: string) {
   }
 }
 
+function broadcastIcecastSettings() {
+  const streamBaseUrl = process.env.PUBLIC_STREAM_BASE_URL ?? 'http://localhost:8000'
+  let host = 'localhost'
+
+  try {
+    host = new URL(streamBaseUrl).hostname
+  } catch {
+    // keep default
+  }
+
+  return {
+    host,
+    port: Number(process.env.ICECAST_PORT ?? 8000),
+    mount: '/broadcast.mp3',
+    sourcePassword: process.env.ICECAST_SOURCE_PASSWORD ?? 'sourcepass',
+  }
+}
+
 function stationSummary(station: RadioStation) {
   return {
     id: station.id,
@@ -372,6 +414,7 @@ function stationSummary(station: RadioStation) {
     streamUrl: station.streamUrl,
     fallbackSource: station.fallbackSource,
     icecast: icecastSettings(station.mount),
+    broadcastIcecast: broadcastIcecastSettings(),
   }
 }
 

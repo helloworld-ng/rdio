@@ -60,6 +60,7 @@ interface StationSummary {
   streamUrl: string
   fallbackSource: FallbackSource
   icecast: IcecastSettings
+  broadcastIcecast: IcecastSettings
 }
 
 interface StationResponse {
@@ -2213,7 +2214,7 @@ function MediaPage({
 
 function BroadcastPage({ station }: { station: StationSummary }) {
   const [isConnected, setIsConnected] = useState(false)
-  const { icecast } = station
+  const { broadcastIcecast: icecast } = station
   const mount = icecast.mount.replace(/^\//, '')
 
   return (
