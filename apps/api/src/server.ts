@@ -18,11 +18,16 @@ const fallbackPlayoutPath = '/media/fallback/v1-tone.mp3'
 const programsFile = path.join(repoRoot, 'media/programs.json')
 const hostsFile = path.join(repoRoot, 'media/hosts.json')
 
-const webOrigin = process.env.WEB_ORIGIN ?? 'http://localhost:5173'
+const allowedOrigins = (process.env.WEB_ORIGIN ?? 'http://localhost:5173')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean)
 const apiKey = process.env.API_KEY
 
-server.addHook('onRequest', async (_request, reply) => {
-  reply.header('Access-Control-Allow-Origin', webOrigin)
+server.addHook('onRequest', async (request, reply) => {
+  const origin = request.headers.origin ?? ''
+  const allowed = allowedOrigins.includes(origin) ? origin : allowedOrigins[0]
+  reply.header('Access-Control-Allow-Origin', allowed)
   reply.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
   reply.header('Access-Control-Allow-Headers', 'Content-Type,X-File-Name,Authorization')
 })
