@@ -21,7 +21,7 @@ cat > /etc/icecast2/icecast.xml <<EOF
   <hostname>localhost</hostname>
   <listen-socket>
     <port>8001</port>
-    <bind-address>127.0.0.1</bind-address>
+    <bind-address>0.0.0.0</bind-address>
   </listen-socket>
   <paths>
     <basedir>/usr/share/icecast2</basedir>

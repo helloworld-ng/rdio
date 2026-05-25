@@ -19,6 +19,13 @@ primary_region = "lhr"
   auto_start_machines  = true
   min_machines_running = 1
 
+[[services]]
+  protocol   = "tcp"
+  internal_port = 8001
+
+  [[services.ports]]
+    port = 8001
+
 [[vm]]
   memory   = "1gb"
   cpu_kind = "shared"
