@@ -6,5 +6,8 @@ dist
 media/uploads/*
 !media/uploads/.gitignore
 !media/uploads/.gitkeep
+media/schedule/*
+!media/schedule/.gitignore
+!media/schedule/.gitkeep
 *.log
 DS_Store

@@ -1,39 +1,113 @@
-import { Clock3, Pause, Play, SkipBack, SkipForward, Volume2 } from 'lucide-react'
+import React, { useEffect, useRef, useState } from 'react'
+import { ListMusic, Mic2, Pause, Play, SkipBack, SkipForward, Volume2 } from 'lucide-react'
 
 interface PlayerBarProps {
-  stationName: string
+  channelName: string
+  programKind: 'broadcast' | 'media'
+  programName?: string
+  streamUrl: string
 }
 
-export function PlayerBar({ stationName }: PlayerBarProps) {
+export function PlayerBar({ channelName, programKind, programName, streamUrl }: PlayerBarProps) {
+  const ProgramIcon = programKind === 'broadcast' ? Mic2 : ListMusic
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [isConnecting, setIsConnecting] = useState(false)
+  const [playbackError, setPlaybackError] = useState('')
+  const nowPlayingTitle = programName ? `${channelName} - ${programName}` : channelName
+  const nowPlayingText = isConnecting
+    ? 'Connecting'
+    : playbackError
+      ? `${nowPlayingTitle} - ${playbackError}`
+      : nowPlayingTitle
+
+  useEffect(() => {
+    const audio = audioRef.current
+
+    if (!audio) {
+      return
+    }
+
+    audio.pause()
+    audio.src = streamUrl
+    audio.load()
+    setIsPlaying(false)
+    setIsConnecting(false)
+    setPlaybackError('')
+  }, [streamUrl])
+
+  const togglePlayback = () => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    if (isPlaying || isConnecting) {
+      audio.pause()
+      setIsPlaying(false)
+      setIsConnecting(false)
+    } else {
+      if (!streamUrl) {
+        setPlaybackError('Stream unavailable')
+        return
+      }
+
+      setPlaybackError('')
+      setIsConnecting(true)
+      audio.loop = false
+      audio.src = streamUrl
+      audio.load()
+      audio.play().catch(() => {
+        setIsConnecting(false)
+        setIsPlaying(false)
+        setPlaybackError('Could not start stream')
+      })
+    }
+  }
+
   return (
     <footer className="player-bar" aria-label="Player">
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+      <audio
+        ref={audioRef}
+        onError={() => {
+          setIsConnecting(false)
+          setIsPlaying(false)
+          setPlaybackError('Stream unavailable')
+        }}
+        onPause={() => {
+          setIsConnecting(false)
+          setIsPlaying(false)
+        }}
+        onPlaying={() => {
+          setIsConnecting(false)
+          setIsPlaying(true)
+          setPlaybackError('')
+        }}
+      />
       <div className="transport-controls">
-        <button type="button" aria-label="Previous">
-          <SkipBack aria-hidden="true" size={18} fill="currentColor" strokeWidth={2} />
+        <button type="button" aria-label="Previous" disabled>
+          <SkipBack aria-hidden="true" size={16} fill="currentColor" strokeWidth={2} />
         </button>
-        <button className="play-toggle" type="button" aria-label="Pause">
-          <Pause aria-hidden="true" size={25} fill="currentColor" strokeWidth={2} />
+        <button className="play-toggle" type="button" aria-label={isPlaying ? 'Pause' : 'Play'} onClick={togglePlayback}>
+          {isPlaying
+            ? <Pause aria-hidden="true" size={22} fill="currentColor" strokeWidth={2} />
+            : <Play aria-hidden="true" size={22} fill="currentColor" strokeWidth={2} />
+          }
         </button>
-        <button type="button" aria-label="Next">
-          <SkipForward aria-hidden="true" size={18} fill="currentColor" strokeWidth={2} />
+        <button type="button" aria-label="Next" disabled>
+          <SkipForward aria-hidden="true" size={16} fill="currentColor" strokeWidth={2} />
         </button>
       </div>
       <div className="now-playing">
-        <span>{stationName} — Window Blues</span>
-        <div className="timeline" aria-hidden="true">
-          <Clock3 size={12} strokeWidth={2} />
-          <span>0:30</span>
-          <div className="progress">
-            <span />
-          </div>
-          <span>4:01</span>
-        </div>
+        <ProgramIcon
+          aria-label={programKind === 'broadcast' ? 'Live broadcast' : 'Recording'}
+          className="now-playing-icon"
+          size={14}
+          strokeWidth={1.8}
+        />
+        <span>{nowPlayingText}</span>
       </div>
       <div className="volume-controls">
-        <Volume2 aria-hidden="true" size={17} fill="currentColor" strokeWidth={2} />
-        <button type="button" aria-label="Start station">
-          <Play aria-hidden="true" size={13} fill="currentColor" strokeWidth={2} />
-        </button>
+        <Volume2 aria-hidden="true" size={15} fill="currentColor" strokeWidth={2} />
       </div>
     </footer>
   )

@@ -1,6 +1,7 @@
-import { useMemo } from 'react'
-import { FileUploadField } from './FileUploadField'
+import { useEffect, useMemo, useRef } from 'react'
+import { RotateCcw } from 'lucide-react'
 import { MediaPreviewThumb } from './MediaPreviewThumb'
+import { MediaSearchSelect } from './MediaSearchSelect'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001'
 
@@ -12,7 +13,11 @@ interface MediaLibraryItem {
   url: string
 }
 
-type MediaSource = 'library' | 'upload'
+export interface SlotMetadata {
+  programTitle: string
+  description: string
+  author: string
+}
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024) {
@@ -26,91 +31,115 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function inferUploadType(file: File): 'audio' | 'image' {
+  return file.type.startsWith('image/') ? 'image' : 'audio'
+}
+
 export function MediaSlotField({
   mediaItems,
   selectedMediaId,
-  source,
   uploadFile,
-  onChangeSource,
+  slotMetadata,
   onSelectMedia,
   onChangeUploadFile,
 }: {
   mediaItems: MediaLibraryItem[]
   selectedMediaId: string | null
-  source: MediaSource
   uploadFile: File | null
-  onChangeSource: (source: MediaSource) => void
+  slotMetadata?: SlotMetadata
   onSelectMedia: (mediaId: string | null) => void
   onChangeUploadFile: (file: File | null) => void
 }) {
+  const uploadInputRef = useRef<HTMLInputElement>(null)
   const selectedItem = useMemo(
     () => mediaItems.find((item) => item.id === selectedMediaId),
     [mediaItems, selectedMediaId],
   )
+  const hasSelection = Boolean(selectedItem || uploadFile)
+
+  const clearSelection = () => {
+    onSelectMedia(null)
+    onChangeUploadFile(null)
+  }
+
+  const previewUrl = useMemo(() => (uploadFile ? URL.createObjectURL(uploadFile) : null), [uploadFile])
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
+      }
+    }
+  }, [previewUrl])
 
   return (
-    <fieldset className="media-slot-field">
-      <legend>Media file</legend>
-      <div className="media-slot-source" role="tablist" aria-label="Media source">
-        <button
-          className={source === 'library' ? 'is-active' : ''}
-          type="button"
-          role="tab"
-          aria-selected={source === 'library'}
-          onClick={() => onChangeSource('library')}
-        >
-          Existing file
-        </button>
-        <button
-          className={source === 'upload' ? 'is-active' : ''}
-          type="button"
-          role="tab"
-          aria-selected={source === 'upload'}
-          onClick={() => onChangeSource('upload')}
-        >
-          Upload new
-        </button>
-      </div>
-      {source === 'library' ? (
-        <div className="media-slot-library">
-          <label>
-            <span>File</span>
-            <select
-              value={selectedMediaId ?? ''}
-              onChange={(event) => onSelectMedia(event.target.value || null)}
-            >
-              <option value="">Select a file</option>
-              {mediaItems.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name} ({item.type})
-                </option>
-              ))}
-            </select>
-          </label>
-          {mediaItems.length === 0 ? (
-            <p className="media-slot-hint">No media in the library yet. Upload a new file instead.</p>
-          ) : null}
-          {selectedItem ? (
-            <div className="file-control-preview">
+    <section className="media-slot-field">
+      {hasSelection ? (
+        <div className="media-slot-selection">
+          <div className="media-slot-selection-card">
+            {selectedItem ? (
               <MediaPreviewThumb apiBaseUrl={apiBaseUrl} name={selectedItem.name} type={selectedItem.type} url={selectedItem.url} />
-              <div className="file-control-info">
-                <strong>{selectedItem.name}</strong>
-                <span>
-                  {selectedItem.type} · {formatFileSize(selectedItem.size)}
-                </span>
-              </div>
+            ) : uploadFile && previewUrl ? (
+              <MediaPreviewThumb name={uploadFile.name} type={inferUploadType(uploadFile)} url={previewUrl} />
+            ) : null}
+            <div className="file-control-info">
+              <strong>{selectedItem?.name ?? uploadFile?.name}</strong>
+              <span>
+                {selectedItem ? `${selectedItem.type} · ${formatFileSize(selectedItem.size)}` : uploadFile ? formatFileSize(uploadFile.size) : ''}
+              </span>
             </div>
-          ) : null}
+          </div>
+          <button className="media-slot-change" type="button" onClick={clearSelection}>
+            <RotateCcw aria-hidden="true" size={14} strokeWidth={1.8} />
+            Change
+          </button>
         </div>
       ) : (
-        <FileUploadField
-          accept="audio/*,image/*"
-          emptyLabel="Choose audio or image"
-          file={uploadFile}
-          label="Upload file"
-          onChange={onChangeUploadFile}
+        <MediaSearchSelect
+          options={mediaItems.map((item) => ({ id: item.id, name: item.name, type: item.type }))}
+          selectedId={selectedMediaId}
+          onSelect={(id) => {
+            onChangeUploadFile(null)
+            onSelectMedia(id)
+          }}
+          onUploadClick={() => uploadInputRef.current?.click()}
         />
       )}
-    </fieldset>
+      <input
+        ref={uploadInputRef}
+        accept="audio/*,image/*"
+        className="media-search-upload-input"
+        tabIndex={-1}
+        type="file"
+        onChange={(event) => {
+          const nextFile = event.target.files?.[0] ?? null
+          event.target.value = ''
+
+          if (nextFile) {
+            onSelectMedia(null)
+            onChangeUploadFile(nextFile)
+          }
+        }}
+      />
+      {slotMetadata ? (
+        <>
+          <div className="media-slot-divider" role="separator" />
+          <div className="media-slot-meta">
+            <div className="media-slot-meta-item">
+              <span>Program</span>
+              <p>{slotMetadata.programTitle || '—'}</p>
+            </div>
+            <div className="media-slot-meta-item">
+              <span>Host</span>
+              <p>{slotMetadata.author || '—'}</p>
+            </div>
+            <div className="media-slot-meta-item">
+              <span>About</span>
+              <p>{slotMetadata.description || '—'}</p>
+            </div>
+          </div>
+        </>
+      ) : null}
+    </section>
   )
 }

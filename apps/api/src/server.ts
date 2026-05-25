@@ -1,6 +1,6 @@
 import Fastify from 'fastify'
 import { createReadStream } from 'node:fs'
-import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
@@ -10,10 +10,15 @@ import { defaultStationId, stations } from './stations'
 const server = Fastify({ bodyLimit: 100 * 1024 * 1024, logger: true })
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const uploadDirectory = path.join(repoRoot, 'media/uploads')
+const scheduleDirectory = path.join(repoRoot, 'media/schedule')
+const scheduleBlocksFile = path.join(scheduleDirectory, 'blocks.json')
+const currentPlayoutFile = path.join(scheduleDirectory, 'current.txt')
+const liquidsoapMediaRoot = '/media/uploads'
+const fallbackPlayoutPath = '/media/fallback/v1-tone.mp3'
 
 server.addHook('onRequest', async (_request, reply) => {
   reply.header('Access-Control-Allow-Origin', '*')
-  reply.header('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS')
+  reply.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
   reply.header('Access-Control-Allow-Headers', 'Content-Type,X-File-Name')
 })
 
@@ -34,6 +39,26 @@ interface MediaFile {
   type: MediaType
   uploadedAt: string
   url: string
+}
+
+interface UploadedFileSummary {
+  name: string
+  size: number
+  duration?: number
+}
+
+interface ScheduleBlock {
+  id: string
+  kind: 'media' | 'broadcast'
+  title: string
+  description: string
+  dateKey: string
+  startMinutes: number
+  endMinutes: number
+  hosts: string[]
+  programId?: string
+  file?: UploadedFileSummary
+  mediaId?: string
 }
 
 function sanitizeFileName(fileName: string) {
@@ -67,6 +92,143 @@ function mediaItemFromFile(fileName: string, size: number, uploadedAt: Date, con
     uploadedAt: uploadedAt.toISOString(),
     url: `/media/${encodeURIComponent(fileName)}`,
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function parseJsonBody(body: unknown) {
+  if (Buffer.isBuffer(body)) {
+    return JSON.parse(body.toString('utf8')) as unknown
+  }
+
+  return body
+}
+
+function normalizeUploadedFile(input: unknown): UploadedFileSummary | undefined {
+  if (!isRecord(input) || typeof input.name !== 'string' || typeof input.size !== 'number') {
+    return undefined
+  }
+
+  return {
+    name: input.name,
+    size: input.size,
+    duration: typeof input.duration === 'number' ? input.duration : undefined,
+  }
+}
+
+function normalizeScheduleBlock(input: unknown): ScheduleBlock | null {
+  if (!isRecord(input)) {
+    return null
+  }
+
+  if (
+    typeof input.id !== 'string' ||
+    (input.kind !== 'media' && input.kind !== 'broadcast') ||
+    typeof input.title !== 'string' ||
+    typeof input.dateKey !== 'string' ||
+    typeof input.startMinutes !== 'number' ||
+    typeof input.endMinutes !== 'number' ||
+    !Array.isArray(input.hosts)
+  ) {
+    return null
+  }
+
+  return {
+    id: input.id,
+    kind: input.kind,
+    title: input.title,
+    description: typeof input.description === 'string' ? input.description : '',
+    dateKey: input.dateKey,
+    startMinutes: Math.max(0, Math.min(1439, Math.round(input.startMinutes))),
+    endMinutes: Math.max(1, Math.min(1439, Math.round(input.endMinutes))),
+    hosts: input.hosts.filter((host): host is string => typeof host === 'string'),
+    programId: typeof input.programId === 'string' ? input.programId : undefined,
+    file: normalizeUploadedFile(input.file),
+    mediaId: typeof input.mediaId === 'string' ? input.mediaId : undefined,
+  }
+}
+
+function normalizeScheduleBlocks(input: unknown): ScheduleBlock[] {
+  const rawBlocks = isRecord(input) && Array.isArray(input.blocks) ? input.blocks : Array.isArray(input) ? input : []
+
+  return rawBlocks
+    .map(normalizeScheduleBlock)
+    .filter((block): block is ScheduleBlock => block !== null)
+}
+
+async function readScheduleBlocks(): Promise<ScheduleBlock[]> {
+  try {
+    const rawSchedule = await readFile(scheduleBlocksFile, 'utf8')
+    return normalizeScheduleBlocks(JSON.parse(rawSchedule))
+  } catch (error) {
+    if (isRecord(error) && error.code === 'ENOENT') {
+      return []
+    }
+
+    throw error
+  }
+}
+
+async function writeScheduleBlocks(blocks: ScheduleBlock[]) {
+  await mkdir(scheduleDirectory, { recursive: true })
+  await writeFile(scheduleBlocksFile, `${JSON.stringify({ blocks }, null, 2)}\n`)
+}
+
+function stationClock(station: RadioStation, at = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    day: '2-digit',
+    hour: '2-digit',
+    hour12: false,
+    minute: '2-digit',
+    month: '2-digit',
+    timeZone: station.timezone,
+    year: 'numeric',
+  }).formatToParts(at)
+  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '00'
+
+  return {
+    dateKey: `${value('year')}-${value('month')}-${value('day')}`,
+    minutes: Number(value('hour')) * 60 + Number(value('minute')),
+  }
+}
+
+function currentMediaBlock(blocks: ScheduleBlock[], station: RadioStation) {
+  const { dateKey, minutes } = stationClock(station)
+
+  return blocks
+    .filter(
+      (block) =>
+        block.kind === 'media' &&
+        block.mediaId &&
+        block.dateKey === dateKey &&
+        block.startMinutes <= minutes &&
+        block.endMinutes > minutes,
+    )
+    .sort((a, b) => a.startMinutes - b.startMinutes)[0]
+}
+
+async function refreshCurrentPlayout() {
+  const station = defaultStation()
+  const block = currentMediaBlock(await readScheduleBlocks(), station)
+  const mediaId = block?.mediaId ? path.basename(block.mediaId) : ''
+  const hostPath = mediaId ? path.join(uploadDirectory, mediaId) : ''
+  const liquidsoapPath = mediaId ? path.posix.join(liquidsoapMediaRoot, mediaId) : ''
+
+  await mkdir(scheduleDirectory, { recursive: true })
+
+  try {
+    if (hostPath) {
+      await stat(hostPath)
+      await writeFile(currentPlayoutFile, `${liquidsoapPath}\n`)
+      return
+    }
+  } catch {
+    // Fall through to silence the scheduled source and let Liquidsoap use fallback.
+  }
+
+  await writeFile(currentPlayoutFile, `${fallbackPlayoutPath}\n`)
 }
 
 async function listMediaFiles(): Promise<MediaFile[]> {
@@ -145,6 +307,27 @@ server.get('/station', async () => ({
 
 server.get('/schedule', async () => scheduleResponse(defaultStation()))
 
+server.get('/schedule-blocks', async () => ({
+  blocks: await readScheduleBlocks(),
+}))
+
+server.put('/schedule-blocks', async (request, reply) => {
+  const blocks = normalizeScheduleBlocks(parseJsonBody(request.body))
+
+  await writeScheduleBlocks(blocks)
+  await refreshCurrentPlayout()
+
+  return reply.send({ blocks })
+})
+
+server.get('/playout/current', async () => {
+  await refreshCurrentPlayout()
+
+  return {
+    path: (await readFile(currentPlayoutFile, 'utf8')).trim(),
+  }
+})
+
 server.get('/now-playing', async () => nowPlayingResponse(defaultStation()))
 
 server.get('/media', async () => ({
@@ -176,6 +359,7 @@ server.delete('/media/:mediaId', async (request, reply) => {
   const safeMediaId = path.basename(mediaId)
 
   await rm(path.join(uploadDirectory, safeMediaId), { force: true })
+  await refreshCurrentPlayout()
   return reply.status(204).send()
 })
 
@@ -191,3 +375,9 @@ server.get('/media/:mediaId', async (request, reply) => {
 
 const port = Number(process.env.API_PORT ?? 3001)
 await server.listen({ port, host: '0.0.0.0' })
+await refreshCurrentPlayout()
+setInterval(() => {
+  refreshCurrentPlayout().catch((error: unknown) => {
+    server.log.error(error)
+  })
+}, 15_000)

@@ -15,6 +15,8 @@ import {
   PanelLeftOpen,
   Plus,
   Radio,
+  Repeat2,
+  Scissors,
   Settings,
   Trash2,
   Users,
@@ -28,7 +30,7 @@ import type { HostRecord } from './components/HostsPage'
 import { HostsPage } from './components/HostsPage'
 import { MultiSelect } from './components/MultiSelect'
 import { PlayerBar } from './components/PlayerBar'
-import { mockAnchorDate, mockBlocks, mockHosts, mockPrograms } from './data/mockStation'
+import { mockAnchorDate, mockHosts, mockPrograms } from './data/mockStation'
 import './styles.css'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001'
@@ -51,6 +53,7 @@ interface StationResponse {
 interface UploadedFileSummary {
   name: string
   size: number
+  duration?: number // seconds
 }
 
 interface MediaItem {
@@ -64,6 +67,10 @@ interface MediaItem {
 
 interface MediaResponse {
   media: MediaItem[]
+}
+
+interface ScheduleBlocksResponse {
+  blocks: ScheduleBlock[]
 }
 
 interface Program {
@@ -99,6 +106,10 @@ type ViewName = 'schedule' | 'programs' | 'hosts' | 'media' | 'broadcast' | 'set
 
 const MOBILE_SIDEBAR_QUERY = '(max-width: 620px)'
 
+function mediaUrl(url: string) {
+  return url.startsWith('http') ? url : `${apiBaseUrl}${url}`
+}
+
 function readInitialSidebarVisible() {
   if (typeof window === 'undefined') {
     return true
@@ -133,6 +144,22 @@ function formatDateKey(date: Date) {
   const day = String(date.getDate()).padStart(2, '0')
 
   return `${year}-${month}-${day}`
+}
+
+function programTitleForBlock(block: ScheduleBlock | undefined, programs: Program[]) {
+  if (!block) {
+    return undefined
+  }
+
+  if (block.programId) {
+    const program = programs.find((item) => item.id === block.programId)
+
+    if (program) {
+      return program.title
+    }
+  }
+
+  return block.title
 }
 
 function dateFromKey(dateKey: string) {
@@ -236,19 +263,32 @@ function getNowMinutes(date = new Date()) {
 }
 
 function getMinutesOffsetInGrid(grid: HTMLElement, minutes: number) {
-  const hour = Math.min(23, Math.floor(minutes / 60))
-  const row = grid.querySelector<HTMLElement>(`.hour-row[data-hour="${hour}"]`)
+  const safeMinutes = Math.max(0, Math.min(1440, minutes))
 
-  if (!row) {
-    return 0
-  }
+  return (safeMinutes / 1440) * grid.clientHeight
+}
 
-  const nextRow = grid.querySelector<HTMLElement>(`.hour-row[data-hour="${hour + 1}"]`)
-  const rowTop = row.offsetTop
-  const rowBottom = nextRow ? nextRow.offsetTop : rowTop + row.offsetHeight
-  const fraction = (minutes % 60) / 60
+function blockOverlapsHour(block: ScheduleBlock, hour: number) {
+  const hourStart = hour * 60
+  const hourEnd = (hour + 1) * 60
 
-  return rowTop + (rowBottom - rowTop) * fraction
+  return block.startMinutes < hourEnd && block.endMinutes > hourStart
+}
+
+function loadAudioDuration(src: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const audio = new Audio()
+    audio.onloadedmetadata = () => resolve(audio.duration)
+    audio.onerror = () => reject(new Error('Could not load audio'))
+    audio.src = src
+  })
+}
+
+function formatSlotDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m === 0 ? `${h} h` : `${h} h ${m} min`
 }
 
 function buildDatePickerDays(monthDate: Date) {
@@ -289,17 +329,24 @@ function App() {
   const [datePickerMonth, setDatePickerMonth] = useState(
     () => new Date(mockAnchorDate.getFullYear(), mockAnchorDate.getMonth(), 1),
   )
-  const [blocks, setBlocks] = useState<ScheduleBlock[]>(mockBlocks)
+  const [blocks, setBlocks] = useState<ScheduleBlock[]>([])
+  const [isScheduleLoaded, setIsScheduleLoaded] = useState(false)
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
   const [mediaFilter, setMediaFilter] = useState<'all' | MediaItem['type']>('all')
   const [hosts, setHosts] = useState(mockHosts)
   const [programs, setPrograms] = useState<Program[]>(mockPrograms)
   const [creationRequest, setCreationRequest] = useState<CreationRequest | null>(null)
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
-  const [editingBlockId, setEditingBlockId] = useState<string | null>(null)
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null)
   const [dragOverHour, setDragOverHour] = useState<number | null>(null)
   const [scheduleFocusToken, setScheduleFocusToken] = useState(1)
+  const [nowTick, setNowTick] = useState(0)
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNowTick((tick) => tick + 1), 60_000)
+
+    return () => window.clearInterval(interval)
+  }, [])
 
   const focusScheduleNow = useCallback(() => {
     const today = new Date()
@@ -308,7 +355,6 @@ function App() {
     setScheduleFocusToken((token) => token + 1)
     setCreationRequest(null)
     setSelectedBlockId(null)
-    setEditingBlockId(null)
   }, [])
 
   useEffect(() => {
@@ -358,6 +404,56 @@ function App() {
   useEffect(() => {
     let ignore = false
 
+    async function loadScheduleBlocks() {
+      try {
+        const response = await fetch(`${apiBaseUrl}/schedule-blocks`)
+
+        if (!response.ok) {
+          throw new Error(`Schedule request failed with ${response.status}`)
+        }
+
+        const data = (await response.json()) as ScheduleBlocksResponse
+
+        if (!ignore) {
+          setBlocks(data.blocks)
+          setIsScheduleLoaded(true)
+        }
+      } catch {
+        if (!ignore) {
+          setBlocks([])
+          setIsScheduleLoaded(false)
+        }
+      }
+    }
+
+    void loadScheduleBlocks()
+
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isScheduleLoaded) {
+      return
+    }
+
+    const timeout = window.setTimeout(() => {
+      void fetch(`${apiBaseUrl}/schedule-blocks`, {
+        body: JSON.stringify({ blocks }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        method: 'PUT',
+      })
+    }, 250)
+
+    return () => window.clearTimeout(timeout)
+  }, [blocks, isScheduleLoaded])
+
+  useEffect(() => {
+    let ignore = false
+
     async function loadMedia() {
       try {
         const response = await fetch(`${apiBaseUrl}/media`)
@@ -392,6 +488,17 @@ function App() {
     () => blocks.filter((block) => block.dateKey === selectedDateKey).sort((a, b) => a.startMinutes - b.startMinutes),
     [blocks, selectedDateKey],
   )
+  const todayDateKey = formatDateKey(new Date())
+  const todayBlocks = useMemo(
+    () => blocks.filter((block) => block.dateKey === todayDateKey).sort((a, b) => a.startMinutes - b.startMinutes),
+    [blocks, todayDateKey],
+  )
+  const currentOnAirBlock = useMemo(() => {
+    const nowMinutes = getNowMinutes()
+
+    return todayBlocks.find((block) => block.startMinutes <= nowMinutes && block.endMinutes > nowMinutes)
+  }, [todayBlocks, nowTick])
+  const playerProgramName = programTitleForBlock(currentOnAirBlock, programs)
   const changeView = (nextView: ViewName) => {
     window.history.pushState({}, '', nextView === 'schedule' ? '/schedule' : `/${nextView}`)
     setActiveView(nextView)
@@ -401,7 +508,6 @@ function App() {
     } else {
       setCreationRequest(null)
       setSelectedBlockId(null)
-      setEditingBlockId(null)
     }
 
     if (window.matchMedia(MOBILE_SIDEBAR_QUERY).matches) {
@@ -417,7 +523,6 @@ function App() {
     })
     setCreationRequest(null)
     setSelectedBlockId(null)
-    setEditingBlockId(null)
   }
 
   const selectDate = (nextDate: Date) => {
@@ -426,7 +531,6 @@ function App() {
     setIsDatePickerOpen(false)
     setCreationRequest(null)
     setSelectedBlockId(null)
-    setEditingBlockId(null)
   }
 
   const saveBlock = (blockInput: ScheduleBlockDraft) => {
@@ -450,7 +554,6 @@ function App() {
   const updateBlock = (blockId: string, blockInput: ScheduleBlockDraft) => {
     setBlocks((current) => current.map((block) => (block.id === blockId ? { ...block, ...blockInput } : block)))
     setSelectedBlockId(blockId)
-    setEditingBlockId(null)
   }
 
   const duplicateBlock = (blockId: string) => {
@@ -478,7 +581,6 @@ function App() {
   const removeBlock = (blockId: string) => {
     setBlocks((current) => current.filter((block) => block.id !== blockId))
     setSelectedBlockId((current) => (current === blockId ? null : current))
-    setEditingBlockId((current) => (current === blockId ? null : current))
   }
 
   const moveBlock = (blockId: string, hour: number) => {
@@ -505,10 +607,24 @@ function App() {
   const beginCreate = (hour: number, kind: ScheduleBlock['kind'] | null = null) => {
     setCreationRequest({ dateKey: selectedDateKey, hour, kind })
     setSelectedBlockId(null)
-    setEditingBlockId(null)
   }
 
-  const uploadMedia = async (file: File) => {
+  const closeSlotPanel = () => {
+    setCreationRequest(null)
+    setSelectedBlockId(null)
+  }
+
+  const selectBlock = (blockId: string | null) => {
+    if (blockId === null) {
+      closeSlotPanel()
+      return
+    }
+
+    setCreationRequest(null)
+    setSelectedBlockId((current) => (current === blockId ? null : blockId))
+  }
+
+  const uploadMedia = async (file: File): Promise<MediaItem> => {
     const response = await fetch(`${apiBaseUrl}/media`, {
       body: file,
       headers: {
@@ -524,6 +640,7 @@ function App() {
 
     const data = (await response.json()) as { media: MediaItem }
     setMediaItems((current) => [data.media, ...current.filter((item) => item.id !== data.media.id)])
+    return data.media
   }
 
   const deleteMedia = async (mediaId: string) => {
@@ -577,8 +694,8 @@ function App() {
                 datePickerMonth={datePickerMonth}
                 dragOverHour={dragOverHour}
                 draggedBlockId={draggedBlockId}
-                editingBlockId={editingBlockId}
                 focusNowToken={scheduleFocusToken}
+                isMobileLayout={isMobileSidebar}
                 hosts={getHostNames(hosts)}
                 isDatePickerOpen={isDatePickerOpen}
                 mediaItems={mediaItems}
@@ -588,26 +705,21 @@ function App() {
                 selectedDateKey={selectedDateKey}
                 onAddHost={(hostName) => setHosts((current) => addHostByName(current, hostName))}
                 onBeginCreate={beginCreate}
-                onCancelCreate={() => setCreationRequest(null)}
                 onChangeCreationKind={(kind) => setCreationRequest((current) => (current ? { ...current, kind } : current))}
                 onDatePickerMonthChange={setDatePickerMonth}
+                onCloseSlotPanel={closeSlotPanel}
                 onDuplicateBlock={duplicateBlock}
-                onEditBlock={(blockId) => {
-                  setEditingBlockId(blockId)
-                  if (blockId) {
-                    setCreationRequest(null)
-                  }
-                }}
                 onMoveBlock={moveBlock}
                 onMoveDay={moveDay}
                 onRemoveBlock={removeBlock}
                 onSaveBlock={saveBlock}
-                onSelectBlock={setSelectedBlockId}
+                onSelectBlock={selectBlock}
                 onSelectDate={selectDate}
                 onSetDragOverHour={setDragOverHour}
                 onSetDraggedBlockId={setDraggedBlockId}
                 onToggleDatePicker={() => setIsDatePickerOpen((current) => !current)}
                 onUpdateBlock={updateBlock}
+                onUploadMedia={uploadMedia}
               />
             ) : activeView === 'programs' ? (
               <ProgramsPage
@@ -661,7 +773,12 @@ function App() {
             )}
           </div>
         </div>
-        <PlayerBar stationName={stationName} />
+        <PlayerBar
+          channelName={stationName}
+          programKind={currentOnAirBlock?.kind ?? 'broadcast'}
+          programName={playerProgramName}
+          streamUrl={currentStation?.streamUrl ?? ''}
+        />
       </section>
     </main>
   )
@@ -721,8 +838,8 @@ function AppSidebar({
         <SidebarButton active={activeView === 'settings'} icon={Settings} label="Settings" onClick={() => onChangeView('settings')} />
       </nav>
       <div className="sidebar-footer">
-        <p className="sidebar-station">{stationName}</p>
-        <p className="sidebar-copyright">© 2026</p>
+        <span className="sidebar-station-name">{stationName}</span>
+        <span className="sidebar-copyright">© {new Date().getFullYear()}</span>
       </div>
     </aside>
   )
@@ -794,7 +911,7 @@ function findMediaIdForFile(file: UploadedFileSummary | undefined, mediaItems: M
   return match?.id ?? null
 }
 
-function slotModalTitle(request: CreationRequest | null, editingBlock?: ScheduleBlock) {
+function slotPanelTitle(request: CreationRequest | null, editingBlock?: ScheduleBlock) {
   if (editingBlock) {
     return 'Edit slot'
   }
@@ -803,7 +920,75 @@ function slotModalTitle(request: CreationRequest | null, editingBlock?: Schedule
     return 'Add to schedule'
   }
 
-  return request.kind === 'broadcast' ? 'Live Broadcast' : 'Media'
+  return request.kind === 'broadcast' ? 'Live Broadcast' : 'New Recording'
+}
+
+function ScheduleSlotPanel({
+  children,
+  isMobile,
+  isOpen,
+  onClose,
+  title,
+}: {
+  children: React.ReactNode
+  isMobile: boolean
+  isOpen: boolean
+  onClose: () => void
+  title: string
+}) {
+  const [sheetEntered, setSheetEntered] = useState(false)
+
+  useEffect(() => {
+    if (!isMobile || !isOpen) {
+      setSheetEntered(false)
+      return
+    }
+
+    const frame = requestAnimationFrame(() => setSheetEntered(true))
+
+    return () => cancelAnimationFrame(frame)
+  }, [isMobile, isOpen])
+
+  if (!isOpen) {
+    return null
+  }
+
+  if (isMobile) {
+    return (
+      <>
+        <button
+          className={['slot-sheet-backdrop', sheetEntered ? 'is-visible' : ''].filter(Boolean).join(' ')}
+          type="button"
+          aria-label="Close slot editor"
+          onClick={onClose}
+        />
+        <aside
+          className={['slot-editor-sheet', sheetEntered ? 'is-open' : ''].filter(Boolean).join(' ')}
+          aria-label={title}
+        >
+          <div className="slot-editor-header">
+            <strong>{title}</strong>
+            <button type="button" onClick={onClose} aria-label="Close slot editor">
+              <X aria-hidden="true" size={15} strokeWidth={1.8} />
+            </button>
+          </div>
+          <div className="slot-editor-body">{children}</div>
+        </aside>
+      </>
+    )
+  }
+
+  return (
+    <aside className="slot-editor-panel" aria-label={title}>
+      <div className="slot-editor-header">
+        <strong>{title}</strong>
+        <button type="button" onClick={onClose} aria-label="Close slot editor">
+          <X aria-hidden="true" size={15} strokeWidth={1.8} />
+        </button>
+      </div>
+      <div className="slot-editor-body">{children}</div>
+    </aside>
+  )
 }
 
 function DailyCalendar({
@@ -812,10 +997,10 @@ function DailyCalendar({
   datePickerMonth,
   dragOverHour,
   draggedBlockId,
-  editingBlockId,
   focusNowToken,
   hosts,
   isDatePickerOpen,
+  isMobileLayout,
   mediaItems,
   programs,
   selectedBlockId,
@@ -823,11 +1008,10 @@ function DailyCalendar({
   selectedDateKey,
   onAddHost,
   onBeginCreate,
-  onCancelCreate,
   onChangeCreationKind,
+  onCloseSlotPanel,
   onDatePickerMonthChange,
   onDuplicateBlock,
-  onEditBlock,
   onMoveBlock,
   onMoveDay,
   onRemoveBlock,
@@ -838,16 +1022,17 @@ function DailyCalendar({
   onSetDraggedBlockId,
   onToggleDatePicker,
   onUpdateBlock,
+  onUploadMedia,
 }: {
   blocks: ScheduleBlock[]
   creationRequest: CreationRequest | null
   datePickerMonth: Date
   dragOverHour: number | null
   draggedBlockId: string | null
-  editingBlockId: string | null
   focusNowToken: number
   hosts: string[]
   isDatePickerOpen: boolean
+  isMobileLayout: boolean
   mediaItems: MediaItem[]
   programs: Program[]
   selectedBlockId: string | null
@@ -855,11 +1040,10 @@ function DailyCalendar({
   selectedDateKey: string
   onAddHost: (host: string) => void
   onBeginCreate: (hour: number, kind?: ScheduleBlock['kind'] | null) => void
-  onCancelCreate: () => void
   onChangeCreationKind: (kind: ScheduleBlock['kind']) => void
+  onCloseSlotPanel: () => void
   onDatePickerMonthChange: (date: Date) => void
   onDuplicateBlock: (blockId: string) => void
-  onEditBlock: (blockId: string | null) => void
   onMoveBlock: (blockId: string, hour: number) => void
   onMoveDay: (offset: number) => void
   onRemoveBlock: (blockId: string) => void
@@ -870,20 +1054,25 @@ function DailyCalendar({
   onSetDraggedBlockId: (blockId: string | null) => void
   onToggleDatePicker: () => void
   onUpdateBlock: (blockId: string, block: ScheduleBlockDraft) => void
+  onUploadMedia: (file: File) => Promise<MediaItem>
 }) {
   const calendarRef = useRef<HTMLElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const lastFocusNowTokenRef = useRef(0)
   const [nowIndicator, setNowIndicator] = useState<{ time: string; top: number } | null>(null)
 
-  const editingBlock = editingBlockId ? blocks.find((block) => block.id === editingBlockId) : undefined
-  const activeRequest = editingBlock
-    ? {
-        dateKey: editingBlock.dateKey,
-        hour: Math.floor(editingBlock.startMinutes / 60),
-        kind: editingBlock.kind,
-      }
-    : creationRequest
+  const selectedBlock = selectedBlockId ? blocks.find((block) => block.id === selectedBlockId) : undefined
+  const editingBlock = creationRequest ? undefined : selectedBlock
+  const activeRequest =
+    creationRequest ??
+    (selectedBlock
+      ? {
+          dateKey: selectedBlock.dateKey,
+          hour: Math.floor(selectedBlock.startMinutes / 60),
+          kind: selectedBlock.kind,
+        }
+      : null)
+  const isSlotPanelOpen = activeRequest !== null
   const isToday = isSameCalendarDay(selectedDate, new Date())
 
   useLayoutEffect(() => {
@@ -894,15 +1083,10 @@ function DailyCalendar({
       return
     }
 
-    const scrollRoot = calendar.closest('.shell')
-
-    if (!(scrollRoot instanceof HTMLElement)) {
-      return
-    }
-
+    const scrollRoot = calendar
     const sticky = calendar.querySelector('.calendar-sticky')
-    const stickyOffset = sticky instanceof HTMLElement ? sticky.offsetHeight + 8 : 96
-    const gridTop = grid.getBoundingClientRect().top - scrollRoot.getBoundingClientRect().top + scrollRoot.scrollTop
+    const stickyOffset = sticky instanceof HTMLElement ? sticky.offsetHeight + 12 : 96
+    const gridTop = grid.offsetTop
 
     if (lastFocusNowTokenRef.current !== focusNowToken) {
       lastFocusNowTokenRef.current = focusNowToken
@@ -947,7 +1131,10 @@ function DailyCalendar({
   }, [blocks, isToday, selectedDateKey])
 
   return (
-    <section className="calendar-view" ref={calendarRef} aria-label="Daily schedule">
+    <div
+      className={isSlotPanelOpen && !isMobileLayout ? 'schedule-workbench has-slot-panel' : 'schedule-workbench'}
+    >
+      <section className="calendar-view" ref={calendarRef} aria-label="Daily schedule">
       <div className="calendar-sticky">
         <div className="day-toggle" aria-label="Schedule day">
           <button type="button" onClick={() => onMoveDay(-1)} aria-label="Previous day">
@@ -976,62 +1163,70 @@ function DailyCalendar({
       </div>
 
       <div className="daily-grid" ref={gridRef} aria-label={`${formatDayTitle(selectedDate)} schedule`}>
-        {hours.map((hour) => {
-          const hourBlocks = blocks.filter((block) => Math.floor(block.startMinutes / 60) === hour)
-          const isActiveHour =
-            activeRequest?.dateKey === selectedDateKey && activeRequest.hour === hour && (creationRequest || editingBlock)
-          const isDropTarget = dragOverHour === hour && draggedBlockId !== null
-
-          return (
-            <div
-              className={['hour-row', isDropTarget ? 'is-drop-target' : '', isActiveHour ? 'is-active-hour' : '']
-                .filter(Boolean)
-                .join(' ')}
-              data-hour={hour}
+        <div className="time-gutter" aria-hidden="true">
+          {hours.map((hour) => (
+            <time
+              className="hour-label"
+              dateTime={`${String(hour).padStart(2, '0')}:00`}
               key={hour}
-              onClick={() => onBeginCreate(hour)}
-              onDragOver={(event) => {
-                if (!draggedBlockId) {
-                  return
-                }
-
-                event.preventDefault()
-                onSetDragOverHour(hour)
-              }}
-              onDrop={(event) => {
-                event.preventDefault()
-
-                if (draggedBlockId) {
-                  onMoveBlock(draggedBlockId, hour)
-                  onSetDraggedBlockId(null)
-                }
-              }}
+              style={{ top: `${(hour / 24) * 100}%` }}
             >
-              <time className="hour-label" dateTime={`${String(hour).padStart(2, '0')}:00`}>
-                {formatHour(hour)}
-              </time>
-              <div className="hour-lane">
-                {hourBlocks.length === 0 ? <span className="slot-hint">Click to add</span> : null}
-                {hourBlocks.map((block) => (
-                  <ScheduleBlockCard
-                    block={block}
-                    isSelected={selectedBlockId === block.id}
-                    key={block.id}
-                    onDuplicate={() => onDuplicateBlock(block.id)}
-                    onEdit={() => onEditBlock(block.id)}
-                    onDragEnd={() => {
-                      onSetDraggedBlockId(null)
-                      onSetDragOverHour(null)
-                    }}
-                    onDragStart={() => onSetDraggedBlockId(block.id)}
-                    onRemove={() => onRemoveBlock(block.id)}
-                    onSelect={() => onSelectBlock(block.id)}
-                  />
-                ))}
-              </div>
-            </div>
-          )
-        })}
+              {formatHour(hour)}
+            </time>
+          ))}
+        </div>
+        <div className="schedule-canvas">
+          <div className="schedule-lines" aria-hidden="true" />
+          {hours.map((hour) => {
+            const hourHasBlock = blocks.some((block) => blockOverlapsHour(block, hour))
+            const isActiveHour =
+              activeRequest?.dateKey === selectedDateKey &&
+              (creationRequest || editingBlock) &&
+              (editingBlock ? blockOverlapsHour(editingBlock, hour) : activeRequest.hour === hour)
+            const isDropTarget = dragOverHour === hour && draggedBlockId !== null
+
+            return (
+              <button
+                aria-label={`Add at ${formatHour(hour)}`}
+                className={['hour-drop-zone', isDropTarget ? 'is-drop-target' : '', isActiveHour ? 'is-active-hour' : '']
+                  .filter(Boolean)
+                  .join(' ')}
+                data-hour={hour}
+                key={hour}
+                style={{ top: `${(hour / 24) * 100}%`, height: `${100 / 24}%` }}
+                type="button"
+                onClick={() => onBeginCreate(hour)}
+                onDragOver={(event) => {
+                  if (!draggedBlockId) {
+                    return
+                  }
+
+                  event.preventDefault()
+                  onSetDragOverHour(hour)
+                }}
+                onDrop={(event) => {
+                  event.preventDefault()
+
+                  if (draggedBlockId) {
+                    onMoveBlock(draggedBlockId, hour)
+                    onSetDraggedBlockId(null)
+                  }
+                }}
+              >
+                {hourHasBlock ? null : <span className="slot-hint">Click to add</span>}
+              </button>
+            )
+          })}
+          <ScheduleBlocksLayer
+            blocks={blocks}
+            selectedBlockId={selectedBlockId}
+            onDuplicateBlock={onDuplicateBlock}
+            onRemoveBlock={onRemoveBlock}
+            onSelectBlock={onSelectBlock}
+            onSetDragOverHour={onSetDragOverHour}
+            onSetDraggedBlockId={onSetDraggedBlockId}
+          />
+        </div>
         {isToday && nowIndicator ? (
           <div
             className="calendar-now-indicator"
@@ -1043,16 +1238,17 @@ function DailyCalendar({
           </div>
         ) : null}
       </div>
+      </section>
 
-      {activeRequest ? (
-        <Modal
-          title={slotModalTitle(creationRequest, editingBlock)}
-          onClose={() => {
-            onCancelCreate()
-            onEditBlock(null)
-          }}
-        >
+      <ScheduleSlotPanel
+        isMobile={isMobileLayout}
+        isOpen={isSlotPanelOpen}
+        title={slotPanelTitle(creationRequest, editingBlock)}
+        onClose={onCloseSlotPanel}
+      >
+        {activeRequest ? (
           <CreationPanel
+            className="creation-panel"
             editingBlock={editingBlock}
             hosts={hosts}
             key={editingBlock?.id ?? `${activeRequest.dateKey}-${activeRequest.hour}-${activeRequest.kind ?? 'pick'}`}
@@ -1060,24 +1256,28 @@ function DailyCalendar({
             programs={programs}
             request={activeRequest}
             onAddHost={onAddHost}
-            onCancel={() => {
-              onCancelCreate()
-              onEditBlock(null)
-            }}
             onChangeKind={onChangeCreationKind}
             onSave={(blockInput) => {
               if (editingBlock) {
                 onUpdateBlock(editingBlock.id, blockInput)
-                onEditBlock(null)
                 return
               }
 
               onSaveBlock(blockInput)
             }}
+            onDelete={
+              editingBlock
+                ? () => {
+                    onRemoveBlock(editingBlock.id)
+                    onCloseSlotPanel()
+                  }
+                : undefined
+            }
+            onUploadMedia={onUploadMedia}
           />
-        </Modal>
-      ) : null}
-    </section>
+        ) : null}
+      </ScheduleSlotPanel>
+    </div>
   )
 }
 
@@ -1133,95 +1333,131 @@ function DatePickerPopover({
 }
 
 function CreationPanel({
+  className,
   editingBlock,
   hosts,
   mediaItems,
   programs,
   request,
   onAddHost,
-  onCancel,
   onChangeKind,
+  onDelete,
   onSave,
+  onUploadMedia,
 }: {
+  className?: string
   editingBlock?: ScheduleBlock
   hosts: string[]
   mediaItems: MediaItem[]
   programs: Program[]
   request: CreationRequest
   onAddHost: (host: string) => void
-  onCancel: () => void
   onChangeKind: (kind: ScheduleBlock['kind']) => void
+  onDelete?: () => void
   onSave: (block: ScheduleBlockDraft) => void
+  onUploadMedia: (file: File) => Promise<MediaItem>
 }) {
   const defaultStartMinutes = request.hour * 60
   const defaultEndMinutes = Math.min(1439, defaultStartMinutes + 60)
   const initialMediaId = editingBlock?.mediaId ?? findMediaIdForFile(editingBlock?.file, mediaItems)
-  const [title, setTitle] = useState(editingBlock?.title ?? (request.kind === 'broadcast' ? 'Live Broadcast' : 'New Media Slot'))
+  const [title, setTitle] = useState(editingBlock?.title ?? (request.kind === 'broadcast' ? 'Live Broadcast' : 'New Recording'))
   const [description, setDescription] = useState(editingBlock?.description ?? '')
   const [startTime, setStartTime] = useState(minutesToTimeInput(editingBlock?.startMinutes ?? defaultStartMinutes))
   const [endTime, setEndTime] = useState(minutesToTimeInput(editingBlock?.endMinutes ?? defaultEndMinutes))
-  const [selectedHosts, setSelectedHosts] = useState<string[]>(editingBlock?.hosts ?? hosts.slice(0, 1))
+  const [selectedHosts, setSelectedHosts] = useState<string[]>(editingBlock?.hosts ?? [])
   const [selectedProgramId, setSelectedProgramId] = useState(editingBlock?.programId ?? '')
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(initialMediaId)
-  const [mediaSource, setMediaSource] = useState<'library' | 'upload'>(initialMediaId ? 'library' : 'upload')
   const [mediaFile, setMediaFile] = useState<File | null>(null)
+  const [mediaDuration, setMediaDuration] = useState<number | undefined>(editingBlock?.file?.duration)
   const selectedProgram = programs.find((program) => program.id === selectedProgramId)
+
+  // Load duration from library item URL when selection changes
+  useEffect(() => {
+    if (!selectedMediaId || mediaFile) {
+      return
+    }
+
+    const item = mediaItems.find((entry) => entry.id === selectedMediaId)
+
+    if (!item || item.type !== 'audio') {
+      setMediaDuration(undefined)
+      return
+    }
+
+    let cancelled = false
+    loadAudioDuration(mediaUrl(item.url)).then((d) => { if (!cancelled) setMediaDuration(d) }).catch(() => { if (!cancelled) setMediaDuration(undefined) })
+    return () => { cancelled = true }
+  }, [selectedMediaId, mediaFile, mediaItems])
 
   useEffect(() => {
     if (editingBlock) {
       return
     }
 
-    setTitle(request.kind === 'broadcast' ? 'Live Broadcast' : 'New Media Slot')
+    setTitle(request.kind === 'broadcast' ? 'Live Broadcast' : 'New Recording')
   }, [editingBlock, request.kind])
 
   useEffect(() => {
-    if (!selectedProgram) {
+    if (editingBlock || !selectedProgram) {
       return
     }
 
     setTitle(selectedProgram.title)
     setDescription(selectedProgram.description)
     setSelectedHosts([selectedProgram.host])
-  }, [selectedProgram])
+  }, [editingBlock, selectedProgram])
 
   if (!request.kind) {
     return (
-      <div className="creation-choice">
+      <div className={[className, 'creation-choice'].filter(Boolean).join(' ')}>
         <button type="button" onClick={() => onChangeKind('broadcast')}>
           <Mic2 aria-hidden="true" size={15} strokeWidth={1.8} />
           Live Broadcast
         </button>
         <button type="button" onClick={() => onChangeKind('media')}>
           <ListMusic aria-hidden="true" size={15} strokeWidth={1.8} />
-          Media
+          Recording
         </button>
       </div>
     )
   }
 
   const kind = request.kind
+  const isEditing = Boolean(editingBlock)
+  const linkedProgram = editingBlock?.programId ? programs.find((program) => program.id === editingBlock.programId) : undefined
+  const mediaSlotMetadata =
+    kind === 'media' && (isEditing || selectedProgram)
+      ? {
+          programTitle: isEditing ? editingBlock!.title : selectedProgram!.title,
+          description: isEditing ? editingBlock!.description : selectedProgram!.description,
+          author: isEditing
+            ? editingBlock!.hosts.join(', ') || linkedProgram?.host || '—'
+            : selectedProgram!.host,
+        }
+      : undefined
 
-  const resolveMediaSelection = () => {
+  const resolveMediaSelection = async () => {
     if (kind !== 'media') {
       return { file: undefined, mediaId: undefined }
     }
 
-    if (mediaSource === 'library' && selectedMediaId) {
+    if (selectedMediaId && !mediaFile) {
       const item = mediaItems.find((entry) => entry.id === selectedMediaId)
 
       if (item) {
         return {
-          file: { name: item.name, size: item.size },
+          file: { name: item.name, size: item.size, duration: mediaDuration },
           mediaId: item.id,
         }
       }
     }
 
-    if (mediaSource === 'upload' && mediaFile) {
+    if (mediaFile) {
+      const uploadedMedia = await onUploadMedia(mediaFile)
+
       return {
-        file: { name: mediaFile.name, size: mediaFile.size },
-        mediaId: undefined,
+        file: { name: uploadedMedia.name, size: uploadedMedia.size, duration: mediaDuration },
+        mediaId: uploadedMedia.id,
       }
     }
 
@@ -1237,118 +1473,196 @@ function CreationPanel({
 
   return (
     <form
-      className="creation-form"
+      className={[className, 'creation-form'].filter(Boolean).join(' ')}
       onSubmit={(event) => {
         event.preventDefault()
 
-        const startMinutes = timeInputToMinutes(startTime)
-        const rawEndMinutes = timeInputToMinutes(endTime)
-        const endMinutes = rawEndMinutes > startMinutes ? rawEndMinutes : Math.min(1439, startMinutes + 30)
-        const mediaSelection = resolveMediaSelection()
+        void (async () => {
+          const startMinutes = timeInputToMinutes(startTime)
+          const rawEndMinutes = timeInputToMinutes(endTime)
+          const endMinutes = rawEndMinutes > startMinutes ? rawEndMinutes : Math.min(1439, startMinutes + 30)
+          const mediaSelection = await resolveMediaSelection()
 
-        onSave({
-          kind,
-          title: selectedProgram?.title ?? (title.trim() || (kind === 'broadcast' ? 'Live Broadcast' : 'New Media Slot')),
-          description: selectedProgram?.description ?? description.trim(),
-          startMinutes,
-          endMinutes,
-          hosts: selectedProgram ? [selectedProgram.host] : selectedHosts,
-          programId: selectedProgram?.id,
-          file: mediaSelection.file,
-          mediaId: mediaSelection.mediaId,
-        })
+          onSave({
+            kind,
+            title: isEditing
+              ? editingBlock!.title
+              : selectedProgram?.title ?? (title.trim() || (kind === 'broadcast' ? 'Live Broadcast' : 'New Recording')),
+            description: isEditing ? editingBlock!.description : selectedProgram?.description ?? description.trim(),
+            startMinutes,
+            endMinutes,
+            hosts: isEditing ? editingBlock!.hosts : selectedProgram ? [selectedProgram.host] : selectedHosts,
+            programId: isEditing ? editingBlock!.programId : selectedProgram?.id,
+            file: mediaSelection.file,
+            mediaId: mediaSelection.mediaId,
+          })
+        })()
       }}
     >
-      <p className="slot-form-context">
-        {formatHour(request.hour)} on {formatShortDate(dateFromKey(request.dateKey))}
-      </p>
-      <label>
-        <span>Program</span>
-        <select value={selectedProgramId} onChange={(event) => setSelectedProgramId(event.target.value)}>
-          <option value="">No program</option>
-          {programs.map((program) => (
-            <option key={program.id} value={program.id}>
-              {program.title}
-            </option>
-          ))}
-        </select>
-      </label>
-      <MultiSelect
-        label="Host"
-        options={hosts}
-        placeholder="Select hosts"
-        value={selectedProgram ? [selectedProgram.host] : selectedHosts}
-        disabled={selectedProgram !== undefined}
-        onChange={setSelectedHosts}
-        onCreateOption={selectedProgram ? undefined : onAddHost}
-        createPlaceholder="New host name"
-      />
-      <label>
-        <span>Title</span>
-        <input disabled={selectedProgram !== undefined} value={title} onChange={(event) => setTitle(event.target.value)} />
-      </label>
-      <label>
-        <span>Start time</span>
-        <input type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
-      </label>
-      <label>
-        <span>End time</span>
-        <input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
-      </label>
-      {request.kind === 'media' ? (
-        <MediaSlotField
-          mediaItems={mediaItems}
-          selectedMediaId={selectedMediaId}
-          source={mediaSource}
-          uploadFile={mediaFile}
-          onChangeSource={setMediaSource}
-          onSelectMedia={setSelectedMediaId}
-          onChangeUploadFile={(nextFile) => {
-            setMediaFile(nextFile)
+      <div className="creation-form-body">
+        {!isEditing ? (
+          <>
+            <label>
+              <span>Program</span>
+              <select value={selectedProgramId} onChange={(event) => setSelectedProgramId(event.target.value)}>
+                <option value="">No program</option>
+                {programs.map((program) => (
+                  <option key={program.id} value={program.id}>
+                    {program.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <MultiSelect
+              label="Host"
+              options={hosts}
+              placeholder="Select hosts"
+              value={selectedProgram ? [selectedProgram.host] : selectedHosts}
+              disabled={selectedProgram !== undefined}
+              onChange={setSelectedHosts}
+              onCreateOption={selectedProgram ? undefined : onAddHost}
+              createPlaceholder="New host name"
+            />
+            <label>
+              <span>Title</span>
+              <input disabled={selectedProgram !== undefined} value={title} onChange={(event) => setTitle(event.target.value)} />
+            </label>
+          </>
+        ) : null}
+        <div className="creation-form-times">
+          <label>
+            <span>Start time</span>
+            <input type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
+          </label>
+          <label>
+            <span>End time</span>
+            <input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
+          </label>
+        </div>
+        {kind === 'media' ? (
+          <MediaSlotField
+            mediaItems={mediaItems}
+            selectedMediaId={selectedMediaId}
+            slotMetadata={mediaSlotMetadata}
+            uploadFile={mediaFile}
+            onSelectMedia={setSelectedMediaId}
+            onChangeUploadFile={(nextFile) => {
+              setMediaFile(nextFile)
 
-            if (nextFile && !selectedProgram && (title === 'New Media Slot' || title.trim() === '')) {
-              setTitle(nextFile.name)
-            }
-          }}
-        />
-      ) : null}
-      <label>
-        <span>Description</span>
-        <textarea disabled={selectedProgram !== undefined} value={description} onChange={(event) => setDescription(event.target.value)} />
-      </label>
-      <div className="form-actions">
-        <button type="button" onClick={onCancel}>
-          Cancel
-        </button>
-        <button className="primary-action" type="submit">
-          {editingBlock ? 'Update' : 'Save'}
-        </button>
+              if (nextFile && !selectedProgram && (title === 'New Recording' || title.trim() === '')) {
+                setTitle(nextFile.name)
+              }
+
+              if (nextFile && nextFile.type.startsWith('audio/')) {
+                const objectUrl = URL.createObjectURL(nextFile)
+                loadAudioDuration(objectUrl)
+                  .then((d) => setMediaDuration(d))
+                  .catch(() => setMediaDuration(undefined))
+                  .finally(() => URL.revokeObjectURL(objectUrl))
+              } else {
+                setMediaDuration(undefined)
+              }
+            }}
+          />
+        ) : null}
+        {!isEditing ? (
+          <label>
+            <span>Description</span>
+            <textarea disabled={selectedProgram !== undefined} value={description} onChange={(event) => setDescription(event.target.value)} />
+          </label>
+        ) : null}
+      </div>
+      <div className={['form-actions', 'creation-form-actions', isEditing ? 'form-actions--split' : ''].filter(Boolean).join(' ')}>
+        {isEditing && onDelete ? (
+          <button className="form-actions-delete" type="button" onClick={onDelete}>
+            Delete
+          </button>
+        ) : null}
+        <div className="form-actions-end">
+          <button className="primary-action" type="submit">
+            {editingBlock ? 'Update' : 'Save'}
+          </button>
+        </div>
       </div>
     </form>
+  )
+}
+
+function ScheduleBlocksLayer({
+  blocks,
+  selectedBlockId,
+  onDuplicateBlock,
+  onRemoveBlock,
+  onSelectBlock,
+  onSetDragOverHour,
+  onSetDraggedBlockId,
+}: {
+  blocks: ScheduleBlock[]
+  selectedBlockId: string | null
+  onDuplicateBlock: (blockId: string) => void
+  onRemoveBlock: (blockId: string) => void
+  onSelectBlock: (blockId: string | null) => void
+  onSetDragOverHour: (hour: number | null) => void
+  onSetDraggedBlockId: (blockId: string | null) => void
+}) {
+  return (
+    <div className="schedule-blocks-layer" aria-hidden={blocks.length === 0}>
+      <div className="schedule-blocks-lane">
+        {blocks.map((block) => {
+          const top = (Math.max(0, Math.min(1440, block.startMinutes)) / 1440) * 100
+          const height = (Math.max(1, Math.min(1440, block.endMinutes) - Math.max(0, block.startMinutes)) / 1440) * 100
+
+          return (
+            <ScheduleBlockCard
+              block={block}
+              isSelected={selectedBlockId === block.id}
+              key={block.id}
+              layout={{ top: `${top}%`, height: `${height}%` }}
+              onDuplicate={() => onDuplicateBlock(block.id)}
+              onDragEnd={() => {
+                onSetDraggedBlockId(null)
+                onSetDragOverHour(null)
+              }}
+              onDragStart={() => onSetDraggedBlockId(block.id)}
+              onRemove={() => onRemoveBlock(block.id)}
+              onSelect={() => onSelectBlock(block.id)}
+            />
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
 function ScheduleBlockCard({
   block,
   isSelected,
+  layout,
   onDragEnd,
   onDragStart,
   onDuplicate,
-  onEdit,
   onRemove,
   onSelect,
 }: {
   block: ScheduleBlock
   isSelected: boolean
+  layout: { top: string; height: string }
   onDragEnd: () => void
   onDragStart: () => void
   onDuplicate: () => void
-  onEdit: () => void
   onRemove: () => void
   onSelect: () => void
 }) {
   const Icon = block.kind === 'broadcast' ? Mic2 : ListMusic
   const durationMinutes = Math.max(30, block.endMinutes - block.startMinutes)
+  const mediaTimingIcon =
+    block.file?.duration == null
+      ? null
+      : block.file.duration < durationMinutes * 60
+        ? <Repeat2 aria-label="Will loop" size={12} strokeWidth={2} />
+        : block.file.duration > durationMinutes * 60
+          ? <Scissors aria-label="Will be cropped" size={12} strokeWidth={2} />
+          : null
 
   return (
     <article
@@ -1367,14 +1681,13 @@ function ScheduleBlockCard({
       onDoubleClick={(event) => {
         event.stopPropagation()
         onSelect()
-        onEdit()
       }}
       onDragEnd={onDragEnd}
       onDragStart={(event) => {
         event.dataTransfer.effectAllowed = 'move'
         onDragStart()
       }}
-      style={{ minHeight: `${Math.max(52, (durationMinutes / 60) * 56)}px` }}
+      style={layout}
     >
       <button className="block-handle" type="button" aria-label="Drag block">
         <GripVertical aria-hidden="true" size={16} strokeWidth={1.8} />
@@ -1387,22 +1700,18 @@ function ScheduleBlockCard({
         <span>
           {formatClockTime(block.startMinutes)} - {formatClockTime(block.endMinutes)}
           {block.hosts.length > 0 ? ` · ${block.hosts.join(', ')}` : ''}
+          {isSelected ? ` · ${formatSlotDuration(durationMinutes)}` : ''}
         </span>
         {block.description ? <span>{block.description}</span> : null}
-        {block.file ? <span>{block.file.name}</span> : null}
+        {block.file ? (
+          <span className="block-file">
+            {mediaTimingIcon}
+            {block.file.name}
+          </span>
+        ) : null}
       </div>
       {isSelected ? (
         <div className="block-actions">
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation()
-              onEdit()
-            }}
-            aria-label="Edit block"
-          >
-            <Settings aria-hidden="true" size={14} strokeWidth={1.8} />
-          </button>
           <button
             type="button"
             onClick={(event) => {
@@ -1606,7 +1915,7 @@ function MediaPage({
   mediaItems: MediaItem[]
   onChangeFilter: (filter: 'all' | MediaItem['type']) => void
   onDeleteMedia: (mediaId: string) => void
-  onUploadMedia: (file: File) => Promise<void>
+  onUploadMedia: (file: File) => Promise<MediaItem>
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [error, setError] = useState('')
