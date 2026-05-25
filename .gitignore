@@ -3,6 +3,7 @@ dist
 .turbo
 .env
 .env.local
+.env.*.local
 media/uploads/*
 !media/uploads/.gitignore
 !media/uploads/.gitkeep

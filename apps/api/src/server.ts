@@ -26,7 +26,8 @@ const apiKey = process.env.API_KEY
 
 server.addHook('onRequest', async (request, reply) => {
   const origin = request.headers.origin ?? ''
-  const allowed = allowedOrigins.includes(origin) ? origin : allowedOrigins[0]
+  const isLocalhost = /^https?:\/\/localhost(:\d+)?$/.test(origin)
+  const allowed = isLocalhost || allowedOrigins.includes(origin) ? origin : allowedOrigins[0]
   reply.header('Access-Control-Allow-Origin', allowed)
   reply.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
   reply.header('Access-Control-Allow-Headers', 'Content-Type,X-File-Name,Authorization')
