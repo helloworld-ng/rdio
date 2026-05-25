@@ -15,8 +15,6 @@ import {
   PanelLeftOpen,
   Plus,
   Radio,
-  Repeat2,
-  Scissors,
   Settings,
   Trash2,
   Users,
@@ -95,6 +93,12 @@ interface ScheduleBlock {
 }
 
 type ScheduleBlockDraft = Omit<ScheduleBlock, 'id' | 'dateKey'>
+
+interface DragDropPreview {
+  startMinutes: number
+  durationMinutes: number
+  canDrop: boolean
+}
 
 interface CreationRequest {
   dateKey: string
@@ -196,13 +200,6 @@ function formatHour(hour: number) {
   }).format(new Date(2026, 0, 1, hour))
 }
 
-function formatClockTime(minutes: number) {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(2026, 0, 1, 0, minutes))
-}
-
 function minutesToTimeInput(minutes: number) {
   const safeMinutes = Math.min(1439, Math.max(0, minutes))
   const hour = Math.floor(safeMinutes / 60)
@@ -238,10 +235,6 @@ function addDays(date: Date, offset: number) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate() + offset)
 }
 
-function clampHour(hour: number) {
-  return Math.min(23, Math.max(0, hour))
-}
-
 function isSameCalendarDay(left: Date, right: Date) {
   return (
     left.getFullYear() === right.getFullYear() &&
@@ -275,6 +268,60 @@ function blockOverlapsHour(block: ScheduleBlock, hour: number) {
   return block.startMinutes < hourEnd && block.endMinutes > hourStart
 }
 
+function timeRangesOverlap(startA: number, endA: number, startB: number, endB: number) {
+  return startA < endB && endA > startB
+}
+
+function minutesFromClientY(canvas: HTMLElement, clientY: number) {
+  const rect = canvas.getBoundingClientRect()
+  const ratio = rect.height > 0 ? (clientY - rect.top) / rect.height : 0
+
+  return Math.round(Math.max(0, Math.min(1, ratio)) * 1440)
+}
+
+function clampBlockStart(startMinutes: number, durationMinutes: number) {
+  const duration = Math.max(30, durationMinutes)
+
+  return Math.min(Math.max(0, startMinutes), 1440 - duration)
+}
+
+function canPlaceBlockAt(
+  blocks: ScheduleBlock[],
+  movingBlockId: string,
+  startMinutes: number,
+  durationMinutes: number,
+) {
+  const duration = Math.max(30, durationMinutes)
+  const endMinutes = startMinutes + duration
+
+  return !blocks.some((block) => {
+    if (block.id === movingBlockId) {
+      return false
+    }
+
+    return timeRangesOverlap(startMinutes, endMinutes, block.startMinutes, block.endMinutes)
+  })
+}
+
+function buildDragDropPreview(
+  blocks: ScheduleBlock[],
+  draggedBlockId: string,
+  canvas: HTMLElement,
+  clientY: number,
+): DragDropPreview | null {
+  const block = blocks.find((entry) => entry.id === draggedBlockId)
+
+  if (!block) {
+    return null
+  }
+
+  const durationMinutes = Math.max(30, block.endMinutes - block.startMinutes)
+  const startMinutes = clampBlockStart(minutesFromClientY(canvas, clientY), durationMinutes)
+  const canDrop = canPlaceBlockAt(blocks, draggedBlockId, startMinutes, durationMinutes)
+
+  return { startMinutes, durationMinutes, canDrop }
+}
+
 function loadAudioDuration(src: string): Promise<number> {
   return new Promise((resolve, reject) => {
     const audio = new Audio()
@@ -285,10 +332,10 @@ function loadAudioDuration(src: string): Promise<number> {
 }
 
 function formatSlotDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes} min`
+  if (minutes < 60) return `${minutes}min`
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
-  return m === 0 ? `${h} h` : `${h} h ${m} min`
+  return m === 0 ? `${h}h` : `${h}h ${m}min`
 }
 
 function buildDatePickerDays(monthDate: Date) {
@@ -338,7 +385,7 @@ function App() {
   const [creationRequest, setCreationRequest] = useState<CreationRequest | null>(null)
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null)
-  const [dragOverHour, setDragOverHour] = useState<number | null>(null)
+  const [dragDropPreview, setDragDropPreview] = useState<DragDropPreview | null>(null)
   const [scheduleFocusToken, setScheduleFocusToken] = useState(1)
   const [nowTick, setNowTick] = useState(0)
 
@@ -583,25 +630,35 @@ function App() {
     setSelectedBlockId((current) => (current === blockId ? null : current))
   }
 
-  const moveBlock = (blockId: string, hour: number) => {
-    setBlocks((current) =>
-      current.map((block) => {
+  const moveBlock = (blockId: string, startMinutes: number) => {
+    setBlocks((current) => {
+      const movingBlock = current.find((block) => block.id === blockId)
+
+      if (!movingBlock) {
+        return current
+      }
+
+      const duration = Math.max(30, movingBlock.endMinutes - movingBlock.startMinutes)
+      const nextStartMinutes = clampBlockStart(startMinutes, duration)
+
+      if (!canPlaceBlockAt(current, blockId, nextStartMinutes, duration)) {
+        return current
+      }
+
+      return current.map((block) => {
         if (block.id !== blockId) {
           return block
         }
 
-        const duration = Math.max(30, block.endMinutes - block.startMinutes)
-        const startMinutes = Math.min(clampHour(hour) * 60, 1440 - duration)
-
         return {
           ...block,
           dateKey: selectedDateKey,
-          startMinutes,
-          endMinutes: startMinutes + duration,
+          startMinutes: nextStartMinutes,
+          endMinutes: nextStartMinutes + duration,
         }
-      }),
-    )
-    setDragOverHour(null)
+      })
+    })
+    setDragDropPreview(null)
   }
 
   const beginCreate = (hour: number, kind: ScheduleBlock['kind'] | null = null) => {
@@ -692,7 +749,7 @@ function App() {
                 blocks={dayBlocks}
                 creationRequest={creationRequest}
                 datePickerMonth={datePickerMonth}
-                dragOverHour={dragOverHour}
+                dragDropPreview={dragDropPreview}
                 draggedBlockId={draggedBlockId}
                 focusNowToken={scheduleFocusToken}
                 isMobileLayout={isMobileSidebar}
@@ -715,7 +772,7 @@ function App() {
                 onSaveBlock={saveBlock}
                 onSelectBlock={selectBlock}
                 onSelectDate={selectDate}
-                onSetDragOverHour={setDragOverHour}
+                onSetDragDropPreview={setDragDropPreview}
                 onSetDraggedBlockId={setDraggedBlockId}
                 onToggleDatePicker={() => setIsDatePickerOpen((current) => !current)}
                 onUpdateBlock={updateBlock}
@@ -995,7 +1052,7 @@ function DailyCalendar({
   blocks,
   creationRequest,
   datePickerMonth,
-  dragOverHour,
+  dragDropPreview,
   draggedBlockId,
   focusNowToken,
   hosts,
@@ -1018,7 +1075,7 @@ function DailyCalendar({
   onSaveBlock,
   onSelectBlock,
   onSelectDate,
-  onSetDragOverHour,
+  onSetDragDropPreview,
   onSetDraggedBlockId,
   onToggleDatePicker,
   onUpdateBlock,
@@ -1027,7 +1084,7 @@ function DailyCalendar({
   blocks: ScheduleBlock[]
   creationRequest: CreationRequest | null
   datePickerMonth: Date
-  dragOverHour: number | null
+  dragDropPreview: DragDropPreview | null
   draggedBlockId: string | null
   focusNowToken: number
   hosts: string[]
@@ -1044,13 +1101,13 @@ function DailyCalendar({
   onCloseSlotPanel: () => void
   onDatePickerMonthChange: (date: Date) => void
   onDuplicateBlock: (blockId: string) => void
-  onMoveBlock: (blockId: string, hour: number) => void
+  onMoveBlock: (blockId: string, startMinutes: number) => void
   onMoveDay: (offset: number) => void
   onRemoveBlock: (blockId: string) => void
   onSaveBlock: (block: ScheduleBlockDraft) => void
   onSelectBlock: (blockId: string | null) => void
   onSelectDate: (date: Date) => void
-  onSetDragOverHour: (hour: number | null) => void
+  onSetDragDropPreview: (preview: DragDropPreview | null) => void
   onSetDraggedBlockId: (blockId: string | null) => void
   onToggleDatePicker: () => void
   onUpdateBlock: (blockId: string, block: ScheduleBlockDraft) => void
@@ -1058,6 +1115,7 @@ function DailyCalendar({
 }) {
   const calendarRef = useRef<HTMLElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLDivElement>(null)
   const lastFocusNowTokenRef = useRef(0)
   const [nowIndicator, setNowIndicator] = useState<{ time: string; top: number } | null>(null)
 
@@ -1175,7 +1233,17 @@ function DailyCalendar({
             </time>
           ))}
         </div>
-        <div className="schedule-canvas">
+        <div
+          className="schedule-canvas"
+          ref={canvasRef}
+          onDragLeave={(event) => {
+            if (!draggedBlockId || event.currentTarget.contains(event.relatedTarget as Node)) {
+              return
+            }
+
+            onSetDragDropPreview(null)
+          }}
+        >
           <div className="schedule-lines" aria-hidden="true" />
           {hours.map((hour) => {
             const hourHasBlock = blocks.some((block) => blockOverlapsHour(block, hour))
@@ -1183,47 +1251,72 @@ function DailyCalendar({
               activeRequest?.dateKey === selectedDateKey &&
               (creationRequest || editingBlock) &&
               (editingBlock ? blockOverlapsHour(editingBlock, hour) : activeRequest.hour === hour)
-            const isDropTarget = dragOverHour === hour && draggedBlockId !== null
 
             return (
               <button
                 aria-label={`Add at ${formatHour(hour)}`}
-                className={['hour-drop-zone', isDropTarget ? 'is-drop-target' : '', isActiveHour ? 'is-active-hour' : '']
-                  .filter(Boolean)
-                  .join(' ')}
+                className={['hour-drop-zone', isActiveHour ? 'is-active-hour' : ''].filter(Boolean).join(' ')}
                 data-hour={hour}
                 key={hour}
                 style={{ top: `${(hour / 24) * 100}%`, height: `${100 / 24}%` }}
                 type="button"
                 onClick={() => onBeginCreate(hour)}
                 onDragOver={(event) => {
-                  if (!draggedBlockId) {
+                  if (!draggedBlockId || !canvasRef.current) {
                     return
                   }
 
                   event.preventDefault()
-                  onSetDragOverHour(hour)
+                  event.dataTransfer.dropEffect = dragDropPreview?.canDrop ? 'move' : 'none'
+
+                  const preview = buildDragDropPreview(blocks, draggedBlockId, canvasRef.current, event.clientY)
+
+                  if (preview) {
+                    onSetDragDropPreview(preview)
+                  }
                 }}
                 onDrop={(event) => {
                   event.preventDefault()
 
-                  if (draggedBlockId) {
-                    onMoveBlock(draggedBlockId, hour)
-                    onSetDraggedBlockId(null)
+                  if (!draggedBlockId || !canvasRef.current) {
+                    return
                   }
+
+                  const preview = buildDragDropPreview(blocks, draggedBlockId, canvasRef.current, event.clientY)
+
+                  if (preview?.canDrop) {
+                    onMoveBlock(draggedBlockId, preview.startMinutes)
+                  }
+
+                  onSetDraggedBlockId(null)
+                  onSetDragDropPreview(null)
                 }}
               >
                 {hourHasBlock ? null : <span className="slot-hint">Click to add</span>}
               </button>
             )
           })}
+          {dragDropPreview && draggedBlockId ? (
+            <div
+              aria-hidden="true"
+              className={[
+                'schedule-drag-preview',
+                dragDropPreview.canDrop ? 'can-drop' : 'cannot-drop',
+              ].join(' ')}
+              style={{
+                top: `${(dragDropPreview.startMinutes / 1440) * 100}%`,
+                height: `${(dragDropPreview.durationMinutes / 1440) * 100}%`,
+              }}
+            />
+          ) : null}
           <ScheduleBlocksLayer
             blocks={blocks}
+            draggedBlockId={draggedBlockId}
             selectedBlockId={selectedBlockId}
             onDuplicateBlock={onDuplicateBlock}
             onRemoveBlock={onRemoveBlock}
             onSelectBlock={onSelectBlock}
-            onSetDragOverHour={onSetDragOverHour}
+            onSetDragDropPreview={onSetDragDropPreview}
             onSetDraggedBlockId={onSetDraggedBlockId}
           />
         </div>
@@ -1539,6 +1632,25 @@ function CreationPanel({
             <input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
           </label>
         </div>
+        {isEditing && kind === 'broadcast' ? (
+          <div className="slot-program-details">
+            <div className="media-slot-divider" role="separator" />
+            <div className="media-slot-meta">
+              <div className="media-slot-meta-item">
+                <span>Program</span>
+                <p>{editingBlock!.title || '—'}</p>
+              </div>
+              <div className="media-slot-meta-item">
+                <span>Host</span>
+                <p>{editingBlock!.hosts.join(', ') || linkedProgram?.host || '—'}</p>
+              </div>
+              <div className="media-slot-meta-item">
+                <span>About</span>
+                <p>{editingBlock!.description || '—'}</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
         {kind === 'media' ? (
           <MediaSlotField
             mediaItems={mediaItems}
@@ -1590,23 +1702,28 @@ function CreationPanel({
 
 function ScheduleBlocksLayer({
   blocks,
+  draggedBlockId,
   selectedBlockId,
   onDuplicateBlock,
   onRemoveBlock,
   onSelectBlock,
-  onSetDragOverHour,
+  onSetDragDropPreview,
   onSetDraggedBlockId,
 }: {
   blocks: ScheduleBlock[]
+  draggedBlockId: string | null
   selectedBlockId: string | null
   onDuplicateBlock: (blockId: string) => void
   onRemoveBlock: (blockId: string) => void
   onSelectBlock: (blockId: string | null) => void
-  onSetDragOverHour: (hour: number | null) => void
+  onSetDragDropPreview: (preview: DragDropPreview | null) => void
   onSetDraggedBlockId: (blockId: string | null) => void
 }) {
   return (
-    <div className="schedule-blocks-layer" aria-hidden={blocks.length === 0}>
+    <div
+      className={['schedule-blocks-layer', draggedBlockId ? 'is-reordering' : ''].filter(Boolean).join(' ')}
+      aria-hidden={blocks.length === 0}
+    >
       <div className="schedule-blocks-lane">
         {blocks.map((block) => {
           const top = (Math.max(0, Math.min(1440, block.startMinutes)) / 1440) * 100
@@ -1615,13 +1732,14 @@ function ScheduleBlocksLayer({
           return (
             <ScheduleBlockCard
               block={block}
+              isDragging={draggedBlockId === block.id}
               isSelected={selectedBlockId === block.id}
               key={block.id}
               layout={{ top: `${top}%`, height: `${height}%` }}
               onDuplicate={() => onDuplicateBlock(block.id)}
               onDragEnd={() => {
                 onSetDraggedBlockId(null)
-                onSetDragOverHour(null)
+                onSetDragDropPreview(null)
               }}
               onDragStart={() => onSetDraggedBlockId(block.id)}
               onRemove={() => onRemoveBlock(block.id)}
@@ -1636,6 +1754,7 @@ function ScheduleBlocksLayer({
 
 function ScheduleBlockCard({
   block,
+  isDragging,
   isSelected,
   layout,
   onDragEnd,
@@ -1645,6 +1764,7 @@ function ScheduleBlockCard({
   onSelect,
 }: {
   block: ScheduleBlock
+  isDragging: boolean
   isSelected: boolean
   layout: { top: string; height: string }
   onDragEnd: () => void
@@ -1655,14 +1775,10 @@ function ScheduleBlockCard({
 }) {
   const Icon = block.kind === 'broadcast' ? Mic2 : ListMusic
   const durationMinutes = Math.max(30, block.endMinutes - block.startMinutes)
-  const mediaTimingIcon =
-    block.file?.duration == null
-      ? null
-      : block.file.duration < durationMinutes * 60
-        ? <Repeat2 aria-label="Will loop" size={12} strokeWidth={2} />
-        : block.file.duration > durationMinutes * 60
-          ? <Scissors aria-label="Will be cropped" size={12} strokeWidth={2} />
-          : null
+  const metaParts = [
+    block.hosts.length > 0 ? block.hosts.join(', ') : '',
+    formatSlotDuration(durationMinutes),
+  ].filter(Boolean)
 
   return (
     <article
@@ -1670,6 +1786,7 @@ function ScheduleBlockCard({
         'schedule-block',
         block.kind === 'broadcast' ? 'is-broadcast' : 'is-media',
         isSelected ? 'is-selected' : '',
+        isDragging ? 'is-dragging' : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -1694,21 +1811,10 @@ function ScheduleBlockCard({
       </button>
       <div className="block-copy">
         <strong>
-          <Icon aria-hidden="true" size={14} strokeWidth={1.8} />
+          <Icon aria-hidden="true" size={12} strokeWidth={1.8} />
           {block.title}
         </strong>
-        <span>
-          {formatClockTime(block.startMinutes)} - {formatClockTime(block.endMinutes)}
-          {block.hosts.length > 0 ? ` · ${block.hosts.join(', ')}` : ''}
-          {isSelected ? ` · ${formatSlotDuration(durationMinutes)}` : ''}
-        </span>
-        {block.description ? <span>{block.description}</span> : null}
-        {block.file ? (
-          <span className="block-file">
-            {mediaTimingIcon}
-            {block.file.name}
-          </span>
-        ) : null}
+        {metaParts.length > 0 ? <span>{metaParts.join(' · ')}</span> : null}
       </div>
       {isSelected ? (
         <div className="block-actions">
