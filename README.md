@@ -197,7 +197,7 @@ Station details live in `packages/config/src/station.ts`:
 export const stationConfig: RadioStationInput = {
   id: '16rdio',
   name: '16 Radio',
-  timezone: 'America/New_York',
+  timezone: 'Africa/Lagos',
   mount: '/rdio.mp3',
   fallbackSource: { kind: 'playlist', playlistId: 'fallback' },
   schedule: [],
