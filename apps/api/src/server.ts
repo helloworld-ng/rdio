@@ -5,7 +5,7 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { findStation, getStationScheduleSnapshot, type RadioStation } from '@rdio/rdio-core'
-import { defaultStationId, stations } from './stations'
+import { defaultStationId, stations } from './stations.js'
 
 const server = Fastify({ bodyLimit: 100 * 1024 * 1024, logger: true })
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
