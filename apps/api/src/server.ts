@@ -350,6 +350,15 @@ server.get('/schedule-blocks', async () => ({
   blocks: await readScheduleBlocks(),
 }))
 
+server.get<{ Params: { day: string } }>('/schedule-blocks/:day', async (request, reply) => {
+  const { day } = request.params
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    return reply.status(400).send({ error: 'day must be in YYYY-MM-DD format' })
+  }
+  const blocks = (await readScheduleBlocks()).filter(b => b.dateKey === day)
+  return { day, blocks }
+})
+
 server.put('/schedule-blocks', async (request, reply) => {
   const blocks = normalizeScheduleBlocks(parseJsonBody(request.body))
 
