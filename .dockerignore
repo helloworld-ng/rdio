@@ -1,0 +1,9 @@
+node_modules/
+.turbo/
+dist/
+.env
+.env.local
+media/uploads/*
+media/schedule/*
+*.log
+.DS_Store

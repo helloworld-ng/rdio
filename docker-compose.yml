@@ -14,6 +14,8 @@ services:
     depends_on:
       - icecast
     environment:
+      ICECAST_HOST: icecast
+      ICECAST_PORT: "8000"
       ICECAST_SOURCE_PASSWORD: ${ICECAST_SOURCE_PASSWORD:-sourcepass}
     volumes:
       - ./services/liquidsoap:/rdio:ro

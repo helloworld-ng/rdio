@@ -1,0 +1,30 @@
+# Replace "rdio-api" with your chosen globally-unique Fly app name.
+app = "rdio-api"
+primary_region = "lhr"
+
+[build]
+  dockerfile = "../../apps/api/Dockerfile"
+  # Pass the Docker context as the repo root so the Dockerfile can copy
+  # packages/ and services/liquidsoap alongside apps/api/.
+  # Run `fly deploy` from the repo root with: fly deploy -c apps/api/fly.toml
+
+[env]
+  NODE_ENV = "production"
+  API_PORT  = "3001"
+
+[http_service]
+  internal_port        = 3001
+  force_https          = true
+  auto_stop_machines   = "stop"
+  auto_start_machines  = true
+  min_machines_running = 1
+
+[[vm]]
+  memory   = "512mb"
+  cpu_kind = "shared"
+  cpus     = 1
+
+[[mounts]]
+  source       = "rdio_media"
+  destination  = "/media"
+  initial_size = "10gb"

@@ -2281,13 +2281,19 @@ button {
   outline: 0;
 }
 
+.shell:has(.empty-page) {
+  display: grid;
+  min-height: 100%;
+  overflow: hidden;
+  padding: 0;
+}
+
 .empty-page {
   align-items: center;
   background: var(--color-paper);
-  border-top: 1px solid var(--color-rule);
   color: var(--color-muted);
   display: grid;
-  min-height: 420px;
+  min-height: 100%;
   place-items: center;
 }
 

@@ -1,0 +1,21 @@
+# Replace "rdio-web" with your chosen globally-unique Fly app name.
+app = "rdio-web"
+primary_region = "lhr"
+
+[build]
+  dockerfile = "../../apps/web/Dockerfile"
+  # VITE_API_BASE_URL is baked into the JS bundle at build time.
+  # Pass it with: fly deploy -c apps/web/fly.toml --build-arg VITE_API_BASE_URL=https://rdio-api.fly.dev
+  # If API_KEY is set, also pass: --build-arg VITE_API_KEY=<your-key>
+
+[http_service]
+  internal_port        = 80
+  force_https          = true
+  auto_stop_machines   = "stop"
+  auto_start_machines  = true
+  min_machines_running = 0
+
+[[vm]]
+  memory   = "256mb"
+  cpu_kind = "shared"
+  cpus     = 1
