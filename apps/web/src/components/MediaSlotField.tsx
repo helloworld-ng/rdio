@@ -20,12 +20,20 @@ export interface SlotMetadata {
   author: string
 }
 
+export type MediaPlaybackNotice = 'loop' | 'truncate'
+
+const PLAYBACK_NOTICE_COPY: Record<MediaPlaybackNotice, string> = {
+  loop: 'This track is shorter than the slot. It will loop until the slot ends.',
+  truncate: 'This track is longer than the slot. It will be truncated when the slot ends.',
+}
+
 function inferUploadType(file: File): 'audio' | 'image' {
   return file.type.startsWith('image/') ? 'image' : 'audio'
 }
 
 export function MediaSlotField({
   mediaItems,
+  playbackNotice,
   selectedMediaId,
   uploadFile,
   slotMetadata,
@@ -33,6 +41,7 @@ export function MediaSlotField({
   onChangeUploadFile,
 }: {
   mediaItems: MediaLibraryItem[]
+  playbackNotice?: MediaPlaybackNotice | null
   selectedMediaId: string | null
   uploadFile: File | null
   slotMetadata?: SlotMetadata
@@ -82,6 +91,11 @@ export function MediaSlotField({
             <RotateCcw aria-hidden="true" size={14} strokeWidth={1.8} />
             Change
           </button>
+          {playbackNotice ? (
+            <p className="media-slot-notice" role="status">
+              {PLAYBACK_NOTICE_COPY[playbackNotice]}
+            </p>
+          ) : null}
         </div>
       ) : (
         <MediaSearchSelect

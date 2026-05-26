@@ -66,15 +66,25 @@ button {
 }
 
 .app-shell {
+  --player-bar-inset: 0px;
   --sidebar-padding-inline: 16px;
   --sidebar-width: 176px;
   --slot-panel-width: min(420px, 38vw);
   background: var(--color-paper);
   display: grid;
-  grid-template-rows: 42px minmax(420px, 1fr) 60px;
+  grid-template-rows: 42px minmax(420px, 1fr);
   height: 100vh;
   overflow: hidden;
+  position: relative;
   width: 100%;
+}
+
+.app-shell:not(.is-player-collapsed) {
+  --player-bar-inset: 60px;
+}
+
+.app-shell:not(.is-player-collapsed) .app-body {
+  padding-bottom: var(--player-bar-inset);
 }
 
 .page-header {
@@ -84,6 +94,7 @@ button {
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.88);
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
+  position: relative;
 }
 
 .page-header.has-sidebar {
@@ -99,10 +110,11 @@ button {
 
 .page-header-main {
   align-items: center;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
+  display: flex;
+  justify-content: flex-end;
   min-width: 0;
-  padding-right: 24px;
+  padding-inline: 24px;
+  width: 100%;
 }
 
 .sidebar-toggle {
@@ -128,8 +140,83 @@ button {
   color: #526166;
   font-size: 15px;
   font-weight: 700;
-  justify-self: end;
+  left: 50%;
   line-height: 20px;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.user-account-menu {
+  position: relative;
+}
+
+.user-account-trigger {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #7e8c91;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 14px;
+  font-weight: 400;
+  gap: 4px;
+  line-height: 20px;
+  padding: 0;
+}
+
+.user-account-trigger svg {
+  color: #9aa8ad;
+  flex-shrink: 0;
+}
+
+.user-account-trigger:hover,
+.user-account-trigger:focus-visible,
+.user-account-trigger[aria-expanded='true'] {
+  color: var(--color-accent);
+  outline: 0;
+}
+
+.user-account-trigger:hover svg,
+.user-account-trigger:focus-visible svg,
+.user-account-trigger[aria-expanded='true'] svg {
+  color: currentColor;
+}
+
+.user-account-dropdown {
+  background: #ffffff;
+  border: 1px solid #d6e0e3;
+  border-radius: 8px;
+  box-shadow: var(--shadow-popover);
+  display: grid;
+  gap: 2px;
+  margin-top: 6px;
+  min-width: 148px;
+  padding: 4px;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 40;
+}
+
+.user-account-dropdown-item {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 18px;
+  padding: 8px 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.user-account-dropdown-item:hover,
+.user-account-dropdown-item:focus-visible {
+  background: #f4f8f9;
+  outline: 0;
 }
 
 .chrome-icon-button {
@@ -150,10 +237,6 @@ button {
   border-color: #9fb0b6;
   color: var(--color-accent);
   outline: 0;
-}
-
-.toolbar-spacer {
-  min-width: 0;
 }
 
 .app-body {
@@ -265,7 +348,7 @@ button {
 .schedule-workbench .calendar-view {
   min-height: 0;
   overflow: auto;
-  padding: 0 28px 34px;
+  padding: 0 16px 34px;
 }
 
 .schedule-workbench .calendar-sticky {
@@ -273,7 +356,7 @@ button {
   display: flex;
   gap: 0;
   min-height: 72px;
-  padding: 0 28px;
+  padding: 0 16px;
 }
 
 .schedule-workbench .calendar-sticky .day-toggle {
@@ -449,8 +532,8 @@ button {
   box-shadow: 0 6px 12px rgba(255, 255, 255, 0.92);
   display: grid;
   gap: 8px;
-  margin: 0 -28px;
-  padding: 12px 28px 12px;
+  margin: 0 -16px;
+  padding: 12px 16px 12px;
   position: sticky;
   top: 0;
   z-index: 5;
@@ -628,9 +711,8 @@ button {
 }
 
 .daily-grid {
-  border-bottom: 1px solid var(--color-rule);
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-columns: 58px minmax(0, 1fr);
   --schedule-hour-height: 48px;
   height: calc(24 * var(--schedule-hour-height));
   overflow: visible;
@@ -639,8 +721,8 @@ button {
 
 .calendar-now-indicator {
   display: grid;
-  gap: 18px;
-  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 12px;
+  grid-template-columns: 58px minmax(0, 1fr);
   left: 0;
   pointer-events: none;
   position: absolute;
@@ -694,7 +776,7 @@ button {
   font-size: 12px;
   font-weight: 700;
   line-height: 20px;
-  padding-right: 18px;
+  padding-right: 12px;
   position: absolute;
   right: 0;
   text-align: right;
@@ -718,7 +800,7 @@ button {
     transparent 1px,
     transparent var(--schedule-hour-height, 96px)
   );
-  inset: 0;
+  inset: 0 0 1px;
   pointer-events: none;
   position: absolute;
 }
@@ -1281,6 +1363,13 @@ button {
 .media-slot-change:focus-visible {
   color: #1284ad;
   outline: 0;
+}
+
+.media-slot-notice {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 18px;
+  margin: 0;
 }
 
 .media-slot-divider {
@@ -2332,6 +2421,64 @@ button {
   text-align: center;
 }
 
+.app-shell.is-player-collapsed {
+  grid-template-rows: 42px minmax(420px, 1fr);
+}
+
+.player-dock {
+  bottom: 0;
+  height: 60px;
+  left: 0;
+  overflow: visible;
+  position: absolute;
+  width: 100%;
+  z-index: 20;
+}
+
+.player-bar-toggle {
+  align-items: center;
+  aspect-ratio: 1;
+  background: linear-gradient(180deg, #ffffff, #e8eff1);
+  border: 1px solid #cbd7da;
+  border-radius: 50%;
+  color: #7e8c91;
+  cursor: pointer;
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  left: 50%;
+  padding: 0;
+  position: absolute;
+  width: 34px;
+  z-index: 2;
+}
+
+.player-dock:not(.is-collapsed) .player-bar-toggle {
+  top: 0;
+  transform: translate(-50%, -50%);
+}
+
+.player-bar-toggle:hover,
+.player-bar-toggle:focus-visible {
+  border-color: #9fb0b6;
+  color: var(--color-accent);
+  outline: 0;
+}
+
+.player-dock.is-collapsed .player-bar-toggle {
+  bottom: 20px;
+  top: auto;
+  transform: translateX(-50%);
+}
+
+.player-dock.is-collapsed .player-bar {
+  display: none;
+}
+
+.player-dock.is-collapsed {
+  height: 0;
+}
+
 .player-bar {
   align-items: center;
   background:
@@ -2340,27 +2487,20 @@ button {
   color: var(--color-player-current);
   display: grid;
   gap: 14px;
-  grid-template-columns: 160px minmax(0, 1fr) 120px;
-  padding: 0 20px;
-}
-
-.transport-controls,
-.volume-controls {
-  align-items: center;
-  display: inline-flex;
+  grid-template-columns: minmax(0, 1fr) auto;
+  height: 100%;
+  padding: 0 16px;
+  width: 100%;
 }
 
 .transport-controls {
+  align-items: center;
+  display: inline-flex;
   gap: 18px;
+  justify-self: end;
 }
 
-.volume-controls {
-  gap: 14px;
-  justify-content: end;
-}
-
-.transport-controls button,
-.volume-controls button {
+.transport-controls button {
   align-items: center;
   background: transparent;
   border: 0;
@@ -2381,7 +2521,7 @@ button {
   align-items: center;
   display: flex;
   gap: 8px;
-  justify-content: center;
+  justify-content: flex-start;
   min-width: 0;
 }
 
@@ -2407,7 +2547,7 @@ button {
   }
 
   .page-header-main {
-    padding-right: 16px;
+    padding-inline: 16px;
   }
 
   .sidebar {
@@ -2450,22 +2590,22 @@ button {
 
   .player-bar {
     gap: 10px;
-    grid-template-columns: 116px minmax(0, 1fr) 48px;
+    grid-template-columns: minmax(0, 1fr) auto;
     padding: 0 16px;
   }
 
   .transport-controls {
     gap: 12px;
   }
-
-  .volume-controls svg {
-    display: none;
-  }
 }
 
 @media (max-width: 620px) {
   .app-shell {
-    grid-template-rows: 42px minmax(420px, 1fr) 46px;
+    grid-template-rows: 42px minmax(420px, 1fr);
+  }
+
+  .app-shell.is-player-collapsed {
+    grid-template-rows: 42px minmax(420px, 1fr);
   }
 
   .app-body,
@@ -2565,15 +2705,9 @@ button {
 
   .date-button {
     font-size: 13px;
-    gap: 6px;
     height: 30px;
     min-width: 0;
     padding: 0 10px;
-  }
-
-  .date-button svg {
-    height: 14px;
-    width: 14px;
   }
 
   .date-button span {
@@ -2665,8 +2799,7 @@ button {
 
   .player-bar {
     gap: 6px;
-    grid-template-columns: max-content minmax(0, 1fr);
-    justify-items: center;
+    grid-template-columns: minmax(0, 1fr) max-content;
     padding: 0 12px;
   }
 
@@ -2686,16 +2819,12 @@ button {
 
   .now-playing {
     gap: 6px;
-    justify-content: start;
+    justify-content: flex-start;
     max-width: 100%;
   }
 
   .now-playing > span {
     font-size: 13px;
     line-height: 16px;
-  }
-
-  .volume-controls {
-    display: none;
   }
 }

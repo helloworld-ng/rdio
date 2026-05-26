@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { ListMusic, Mic2, Pause, Play, SkipBack, SkipForward, Volume2 } from 'lucide-react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { ChevronDown, ChevronUp, ListMusic, Mic2, Pause, Play } from 'lucide-react'
 
 interface PlayerBarProps {
   channelName: string
@@ -10,7 +10,9 @@ interface PlayerBarProps {
 
 export function PlayerBar({ channelName, programKind, programName, streamUrl }: PlayerBarProps) {
   const ProgramIcon = programKind === 'broadcast' ? Mic2 : ListMusic
+  const dockRef = useRef<HTMLDivElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const [isBarVisible, setIsBarVisible] = useState(true)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const [playbackError, setPlaybackError] = useState('')
@@ -21,6 +23,12 @@ export function PlayerBar({ channelName, programKind, programName, streamUrl }: 
       : isPlaying && programName
         ? `${channelName} – ${programName}`
         : channelName
+
+  useLayoutEffect(() => {
+    const shell = dockRef.current?.closest('.app-shell')
+    shell?.classList.toggle('is-player-collapsed', !isBarVisible)
+    return () => shell?.classList.remove('is-player-collapsed')
+  }, [isBarVisible])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -65,7 +73,25 @@ export function PlayerBar({ channelName, programKind, programName, streamUrl }: 
   }
 
   return (
-    <footer className="player-bar" aria-label="Player">
+    <div
+      ref={dockRef}
+      className={isBarVisible ? 'player-dock' : 'player-dock is-collapsed'}
+    >
+      <button
+        className="player-bar-toggle"
+        type="button"
+        aria-controls="player-bar-panel"
+        aria-expanded={isBarVisible}
+        aria-label={isBarVisible ? 'Hide player' : 'Show player'}
+        onClick={() => setIsBarVisible((visible) => !visible)}
+      >
+        {isBarVisible ? (
+          <ChevronDown aria-hidden="true" size={16} strokeWidth={2} />
+        ) : (
+          <ChevronUp aria-hidden="true" size={16} strokeWidth={2} />
+        )}
+      </button>
+      <footer id="player-bar-panel" className="player-bar" aria-label="Player">
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <audio
         ref={audioRef}
@@ -84,20 +110,6 @@ export function PlayerBar({ channelName, programKind, programName, streamUrl }: 
           setPlaybackError('')
         }}
       />
-      <div className="transport-controls">
-        <button type="button" aria-label="Previous" disabled>
-          <SkipBack aria-hidden="true" size={16} fill="currentColor" strokeWidth={2} />
-        </button>
-        <button className="play-toggle" type="button" aria-label={isPlaying ? 'Pause' : 'Play'} onClick={togglePlayback}>
-          {isPlaying
-            ? <Pause aria-hidden="true" size={22} fill="currentColor" strokeWidth={2} />
-            : <Play aria-hidden="true" size={22} fill="currentColor" strokeWidth={2} />
-          }
-        </button>
-        <button type="button" aria-label="Next" disabled>
-          <SkipForward aria-hidden="true" size={16} fill="currentColor" strokeWidth={2} />
-        </button>
-      </div>
       <div className="now-playing">
         {!playbackError && !isConnecting && (
           <ProgramIcon
@@ -109,9 +121,15 @@ export function PlayerBar({ channelName, programKind, programName, streamUrl }: 
         )}
         <span>{nowPlayingText}</span>
       </div>
-      <div className="volume-controls">
-        <Volume2 aria-hidden="true" size={15} fill="currentColor" strokeWidth={2} />
+      <div className="transport-controls">
+        <button className="play-toggle" type="button" aria-label={isPlaying ? 'Pause' : 'Play'} onClick={togglePlayback}>
+          {isPlaying
+            ? <Pause aria-hidden="true" size={22} fill="currentColor" strokeWidth={2} />
+            : <Play aria-hidden="true" size={22} fill="currentColor" strokeWidth={2} />
+          }
+        </button>
       </div>
-    </footer>
+      </footer>
+    </div>
   )
 }

@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client'
 import type { FallbackSource } from '@rdio/rdio-core'
 import {
   BookOpen,
-  CalendarClock,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -27,6 +26,7 @@ import { HostAvatar, hostPalette } from './components/HostAvatar'
 import type { HostRecord } from './components/HostsPage'
 import { HostsPage } from './components/HostsPage'
 import { MultiSelect } from './components/MultiSelect'
+import { UserAccountMenu } from './components/UserAccountMenu'
 import { PlayerBar } from './components/PlayerBar'
 import { mockAnchorDate } from './data/mockStation'
 import { formatFileSize } from './utils'
@@ -201,7 +201,7 @@ function dateFromKey(dateKey: string) {
 
 function formatDayTitle(date: Date) {
   return new Intl.DateTimeFormat(undefined, {
-    weekday: 'long',
+    weekday: 'short',
     month: 'long',
     day: 'numeric',
     year: 'numeric',
@@ -240,6 +240,32 @@ function timeInputToMinutes(value: string) {
   const [hour = '0', minute = '0'] = value.split(':')
 
   return Number(hour) * 60 + Number(minute)
+}
+
+function slotDurationSeconds(startTime: string, endTime: string) {
+  const startMinutes = timeInputToMinutes(startTime)
+  const rawEndMinutes = timeInputToMinutes(endTime)
+  const endMinutes = rawEndMinutes > startMinutes ? rawEndMinutes : Math.min(1439, startMinutes + 30)
+
+  return Math.max(0, endMinutes - startMinutes) * 60
+}
+
+type MediaPlaybackNotice = 'loop' | 'truncate'
+
+function mediaPlaybackNotice(slotSeconds: number, mediaSeconds: number | undefined): MediaPlaybackNotice | null {
+  if (mediaSeconds === undefined || !Number.isFinite(mediaSeconds) || mediaSeconds <= 0) {
+    return null
+  }
+
+  if (mediaSeconds < slotSeconds - 1) {
+    return 'loop'
+  }
+
+  if (mediaSeconds > slotSeconds + 1) {
+    return 'truncate'
+  }
+
+  return null
 }
 
 function formatUploadTime(value: string) {
@@ -1053,9 +1079,9 @@ function PageHeader({
         </button>
       </div>
       <div className="page-header-main">
-        <div className="toolbar-spacer" />
-        <div className="brand-mark">rdio</div>
+        <UserAccountMenu />
       </div>
+      <div className="brand-mark">rdio</div>
     </header>
   )
 }
@@ -1389,7 +1415,6 @@ function DailyCalendar({
           </button>
           <div className="date-popover-anchor">
             <button className="date-button" type="button" onClick={onToggleDatePicker}>
-              <CalendarClock aria-hidden="true" size={16} strokeWidth={1.8} />
               <span>{formatDayTitle(selectedDate)}</span>
             </button>
             {isDatePickerOpen ? (
@@ -1717,6 +1742,16 @@ function CreationPanel({
     setSelectedHosts([selectedProgram.host])
   }, [editingBlock, selectedProgram])
 
+  const selectedAudioItem = selectedMediaId ? mediaItems.find((entry) => entry.id === selectedMediaId) : undefined
+  const hasAudioSelection =
+    request.kind === 'recording' &&
+    ((mediaFile?.type.startsWith('audio/') ?? false) ||
+      selectedAudioItem?.type === 'audio' ||
+      Boolean(editingBlock?.mediaId && editingBlock.file && !mediaFile && !selectedMediaId))
+  const playbackNotice = hasAudioSelection
+    ? mediaPlaybackNotice(slotDurationSeconds(startTime, endTime), mediaDuration)
+    : null
+
   if (!request.kind) {
     return (
       <div className={[className, 'creation-choice'].filter(Boolean).join(' ')}>
@@ -1883,6 +1918,7 @@ function CreationPanel({
         {kind === 'recording' ? (
           <MediaSlotField
             mediaItems={mediaItems}
+            playbackNotice={playbackNotice}
             selectedMediaId={selectedMediaId}
             slotMetadata={mediaSlotMetadata}
             uploadFile={mediaFile}
