@@ -2536,8 +2536,6 @@ function BroadcastPage({ station }: { station: StationSummary }) {
             <SettingsRow label="User" value="source" />
             <SettingsRow label="Password" value={broadcastSettings?.sourcePassword ?? 'Requires API key'} />
             <SettingsRow label="Mount" value={mount} />
-            <SettingsRow label="Station name" value={station.name} />
-            <SettingsRow label="Public stream" value={station.streamUrl} />
           </div>
         </section>
       </div>
