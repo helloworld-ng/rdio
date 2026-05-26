@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronUp, ListMusic, Mic2, Pause, Play } from 'lucide-react'
+import { ChevronDown, ChevronUp, ListMusic, Mic2, Pause, Play, Share2 } from 'lucide-react'
 
 interface PlayerBarProps {
   channelName: string
@@ -40,6 +40,8 @@ export function PlayerBar({ channelName, programKind, programName, streamUrl }: 
   const [isPlaying, setIsPlaying] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const [playbackError, setPlaybackError] = useState('')
+  const [shareStatus, setShareStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const shareResetTimerRef = useRef<number | null>(null)
   const nowPlayingText = playbackError
     ? playbackError
     : isConnecting
@@ -77,6 +79,43 @@ export function PlayerBar({ channelName, programKind, programName, streamUrl }: 
     setPlaybackError('')
   }, [streamUrl])
 
+  useEffect(() => {
+    return () => {
+      if (shareResetTimerRef.current !== null) {
+        window.clearTimeout(shareResetTimerRef.current)
+      }
+    }
+  }, [])
+
+  const copyStreamUrl = async () => {
+    if (!streamUrl) {
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(streamUrl)
+      setShareStatus('copied')
+    } catch {
+      setShareStatus('failed')
+    }
+
+    if (shareResetTimerRef.current !== null) {
+      window.clearTimeout(shareResetTimerRef.current)
+    }
+
+    shareResetTimerRef.current = window.setTimeout(() => {
+      setShareStatus('idle')
+      shareResetTimerRef.current = null
+    }, 2000)
+  }
+
+  const shareLabel =
+    shareStatus === 'copied'
+      ? 'Stream link copied'
+      : shareStatus === 'failed'
+        ? 'Could not copy stream link'
+        : 'Copy stream link'
+
   const togglePlayback = () => {
     const audio = audioRef.current
     if (!audio) return
@@ -109,20 +148,42 @@ export function PlayerBar({ channelName, programKind, programName, streamUrl }: 
       ref={dockRef}
       className={isBarVisible ? 'player-dock' : 'player-dock is-collapsed'}
     >
-      <button
-        className="player-bar-toggle player-bar-toggle--inline"
-        type="button"
-        aria-controls="player-bar-panel"
-        aria-expanded={isBarVisible}
-        aria-label={isBarVisible ? 'Hide player' : 'Show player'}
-        onClick={() => setIsBarVisible((visible) => !visible)}
-      >
-        {isBarVisible ? (
-          <ChevronDown aria-hidden="true" size={16} strokeWidth={2} />
-        ) : (
-          <ChevronUp aria-hidden="true" size={16} strokeWidth={2} />
-        )}
-      </button>
+      <div className="player-dock-actions">
+        <span className="player-share-status" role="status" aria-live="polite">
+          {shareStatus === 'copied'
+            ? 'Stream link copied to clipboard'
+            : shareStatus === 'failed'
+              ? 'Could not copy stream link'
+              : ''}
+        </span>
+        <button
+          className="player-share-button"
+          type="button"
+          aria-label={shareLabel}
+          disabled={!streamUrl}
+          title={shareLabel}
+          onClick={() => {
+            void copyStreamUrl()
+          }}
+        >
+          <Share2 aria-hidden="true" size={16} strokeWidth={2} />
+        </button>
+        <button
+          className="player-bar-toggle player-bar-toggle--inline"
+          type="button"
+          aria-controls="player-bar-panel"
+          aria-expanded={isBarVisible}
+          aria-label={isBarVisible ? 'Hide player' : 'Show player'}
+          title={isBarVisible ? 'Hide player' : 'Show player'}
+          onClick={() => setIsBarVisible((visible) => !visible)}
+        >
+          {isBarVisible ? (
+            <ChevronDown aria-hidden="true" size={16} strokeWidth={2} />
+          ) : (
+            <ChevronUp aria-hidden="true" size={16} strokeWidth={2} />
+          )}
+        </button>
+      </div>
       <footer id="player-bar-panel" className="player-bar" aria-label="Player">
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <audio
@@ -154,7 +215,13 @@ export function PlayerBar({ channelName, programKind, programName, streamUrl }: 
         <span>{nowPlayingText}</span>
       </div>
       <div className="transport-controls">
-        <button className="play-toggle" type="button" aria-label={isPlaying ? 'Pause' : 'Play'} onClick={togglePlayback}>
+        <button
+          className="play-toggle"
+          type="button"
+          aria-label={isPlaying ? 'Pause' : 'Play'}
+          title={isPlaying ? 'Pause' : 'Play'}
+          onClick={togglePlayback}
+        >
           {isPlaying
             ? <Pause aria-hidden="true" size={22} fill="currentColor" strokeWidth={2} />
             : <Play aria-hidden="true" size={22} fill="currentColor" strokeWidth={2} />
