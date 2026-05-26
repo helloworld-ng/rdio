@@ -166,7 +166,9 @@ GET  /station                   Station metadata and stream URL
 GET  /schedule                  Station schedule snapshot
 GET  /now-playing               Current stream source and upcoming programs
 GET  /schedule-blocks/:day      Schedule blocks for a given day (YYYY-MM-DD)
+GET  /broadcast/status          Live broadcast source connection status
 GET  /rdio.mp3                  Live audio stream (proxied from internal Icecast2)
+GET  /media/:id                 Serve a media file
 ```
 
 ### Admin (require `Authorization: Bearer <API_KEY>` when `API_KEY` is set)
@@ -174,6 +176,7 @@ GET  /rdio.mp3                  Live audio stream (proxied from internal Icecast
 ```
 GET    /schedule-blocks         All schedule blocks
 PUT    /schedule-blocks         Replace all schedule blocks; triggers playout refresh
+GET    /broadcast/settings      BUTT/Icecast source settings, including source password
 GET    /programs                List programs
 POST   /programs                Create a program
 PUT    /programs/:id            Update a program
@@ -184,7 +187,6 @@ PUT    /hosts/:name             Update a host (cascades name changes to programs
 DELETE /hosts/:name             Delete a host
 GET    /media                   List uploaded media files
 POST   /media                   Upload a media file (binary body, X-File-Name header)
-GET    /media/:id               Serve a media file
 DELETE /media/:id               Delete a media file; triggers playout refresh
 GET    /playout/current         Current Liquidsoap playout file path
 ```
@@ -206,8 +208,8 @@ export const stationConfig: RadioStationInput = {
 
 ## Liquidsoap playout
 
-Liquidsoap reads `current.txt` via a `request.dynamic` source. The API refreshes this file on every schedule block save, media delete, and on a 15-second polling interval. If no scheduled media is active, the fallback file (`/media/fallback/v1-tone.mp3`) is used.
+Liquidsoap reads `current.txt` via a `request.dynamic` source. The API refreshes this file on every schedule block save, media delete, and on a 15-second polling interval. If no scheduled media is active, the fallback file (`/media/fallback/v1-tone.mp3`) is used. During scheduled live blocks, the API writes the `broadcast` sentinel so Liquidsoap switches to the `/broadcast.mp3` live input.
 
 ## Live broadcast (BUTT)
 
-The Broadcast view in the admin shows connection settings for BUTT (Broadcast Using This Tool). Connect BUTT to Icecast using the source password from your env (`ICECAST_SOURCE_PASSWORD`). Locally, Icecast listens on port `8000`. In production, Icecast is internal — live broadcast from outside the container is not yet supported.
+The Broadcast view in the admin shows connection settings for BUTT (Broadcast Using This Tool). Connect BUTT to Icecast using the source password from your env (`ICECAST_SOURCE_PASSWORD`). The password is only returned from the authenticated `GET /broadcast/settings` endpoint. Locally, Icecast listens on port `8000`. In production, Icecast is internal — live broadcast from outside the container is not yet supported.
