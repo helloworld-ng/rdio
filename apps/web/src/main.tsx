@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { FallbackSource } from '@rdio/rdio-core'
+import { Toaster, toast } from 'sonner'
 import {
   BookOpen,
   CalendarClock,
@@ -42,6 +43,15 @@ async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
     headers.set('Authorization', `Bearer ${apiKey}`)
   }
   return fetch(url, { ...init, headers })
+}
+
+async function responseError(response: Response, fallback: string) {
+  try {
+    const data = (await response.json()) as { error?: string }
+    return data.error ?? fallback
+  } catch {
+    return fallback
+  }
 }
 
 interface IcecastSettings {
@@ -409,9 +419,8 @@ function App() {
   )
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([])
   const [isScheduleLoaded, setIsScheduleLoaded] = useState(false)
-  const [scheduleSaveError, setScheduleSaveError] = useState('')
-  const [scheduleSaveState, setScheduleSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const scheduleVersionRef = useRef<string | null>(null)
+  const suppressNextScheduleSaveRef = useRef(false)
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
   const [mediaFilter, setMediaFilter] = useState<'all' | MediaItem['type']>('all')
   const [hosts, setHosts] = useState<HostRecord[]>([])
@@ -498,10 +507,10 @@ function App() {
         const data = (await response.json()) as ScheduleBlocksResponse
 
         if (!ignore) {
+          suppressNextScheduleSaveRef.current = true
           setBlocks(data.blocks)
           scheduleVersionRef.current = data.version
           setIsScheduleLoaded(true)
-          setScheduleSaveError('')
         }
       } catch {
         if (!ignore) {
@@ -551,8 +560,13 @@ function App() {
       return
     }
 
+    if (suppressNextScheduleSaveRef.current) {
+      suppressNextScheduleSaveRef.current = false
+      return
+    }
+
     const timeout = window.setTimeout(() => {
-      setScheduleSaveState('saving')
+      const toastId = toast.loading('Saving schedule')
       void (async () => {
         try {
           const response = await apiFetch(`${apiBaseUrl}/schedule-blocks`, {
@@ -566,12 +580,12 @@ function App() {
 
           if (!response.ok) {
             if (response.status === 409 && Array.isArray(data.blocks) && typeof data.version === 'string') {
+              suppressNextScheduleSaveRef.current = true
               setBlocks(data.blocks)
               scheduleVersionRef.current = data.version
             }
 
-            setScheduleSaveState('idle')
-            setScheduleSaveError(data.error ?? 'Could not save schedule changes.')
+            toast.error(data.error ?? 'Could not save schedule changes.', { id: toastId })
             return
           }
 
@@ -579,11 +593,9 @@ function App() {
             scheduleVersionRef.current = data.version
           }
 
-          setScheduleSaveState('saved')
-          setScheduleSaveError('')
+          toast.success('Schedule saved', { id: toastId })
         } catch {
-          setScheduleSaveState('idle')
-          setScheduleSaveError('Could not save schedule changes.')
+          toast.error('Could not save schedule changes.', { id: toastId })
         }
       })()
     }, 250)
@@ -689,12 +701,10 @@ function App() {
     let didSave = false
     setBlocks((current) => {
       if (blockConflictsWith(current, nextBlock.id, nextBlock)) {
-        setScheduleSaveError('Schedule blocks cannot overlap.')
+        toast.error('Schedule blocks cannot overlap.')
         return current
       }
 
-      setScheduleSaveError('')
-      setScheduleSaveState('idle')
       didSave = true
       return [...current, nextBlock]
     })
@@ -713,12 +723,10 @@ function App() {
 
       const nextBlock = { ...block, ...blockInput }
       if (blockConflictsWith(current, blockId, nextBlock)) {
-        setScheduleSaveError('Schedule blocks cannot overlap.')
+        toast.error('Schedule blocks cannot overlap.')
         return block
       }
 
-      setScheduleSaveError('')
-      setScheduleSaveState('idle')
       return nextBlock
     }))
     setSelectedBlockId(blockId)
@@ -743,22 +751,16 @@ function App() {
       }
 
       if (blockConflictsWith(current, nextBlock.id, nextBlock)) {
-        setScheduleSaveError('The duplicate overlaps another schedule block.')
+        toast.error('The duplicate overlaps another schedule block.')
         return current
       }
 
-      setScheduleSaveError('')
-      setScheduleSaveState('idle')
       return [...current, nextBlock]
     })
   }
 
   const removeBlock = (blockId: string) => {
-    setBlocks((current) => {
-      setScheduleSaveError('')
-      setScheduleSaveState('idle')
-      return current.filter((block) => block.id !== blockId)
-    })
+    setBlocks((current) => current.filter((block) => block.id !== blockId))
     setSelectedBlockId((current) => (current === blockId ? null : current))
   }
 
@@ -778,12 +780,10 @@ function App() {
         startMinutes: nextStartMinutes,
         endMinutes: nextStartMinutes + duration,
       })) {
-        setScheduleSaveError('Schedule blocks cannot overlap.')
+        toast.error('Schedule blocks cannot overlap.')
         return current
       }
 
-      setScheduleSaveError('')
-      setScheduleSaveState('idle')
       return current.map((block) => {
         if (block.id !== blockId) {
           return block
@@ -831,24 +831,24 @@ function App() {
     })
 
     if (!response.ok) {
-      throw new Error(`Upload failed with ${response.status}`)
+      throw new Error(await responseError(response, 'Upload failed.'))
     }
 
     const data = (await response.json()) as { media: MediaItem }
     setMediaItems((current) => [data.media, ...current.filter((item) => item.id !== data.media.id)])
+    toast.success('Media uploaded')
     return data.media
   }
 
   const applyScheduleMutation = (data: ScheduleMutationResponse) => {
     if (Array.isArray(data.blocks)) {
+      suppressNextScheduleSaveRef.current = true
       setBlocks(data.blocks)
     }
 
     if (typeof data.version === 'string') {
       scheduleVersionRef.current = data.version
     }
-
-    setScheduleSaveError('')
   }
 
   const deleteMedia = async (mediaId: string) => {
@@ -865,16 +865,36 @@ function App() {
     })
 
     if (!response.ok) {
-      throw new Error(`Delete failed with ${response.status}`)
+      throw new Error(await responseError(response, 'Delete failed.'))
     }
 
     const data = (await response.json()) as ScheduleMutationResponse
     setMediaItems((current) => current.filter((item) => item.id !== mediaId))
     applyScheduleMutation(data)
+    toast.success('Media deleted')
   }
 
   return (
     <main className="app-page">
+      <Toaster
+        className="rdio-toaster"
+        closeButton
+        position="top-right"
+        richColors={false}
+        toastOptions={{
+          classNames: {
+            actionButton: 'rdio-toast-action',
+            cancelButton: 'rdio-toast-cancel',
+            closeButton: 'rdio-toast-close',
+            description: 'rdio-toast-description',
+            error: 'rdio-toast-error',
+            loading: 'rdio-toast-loading',
+            success: 'rdio-toast-success',
+            toast: 'rdio-toast',
+            title: 'rdio-toast-title',
+          },
+        }}
+      />
       <section
         className={currentStation ? 'app-shell' : 'app-shell is-station-loading'}
         aria-label="Rdio scheduler"
@@ -920,8 +940,6 @@ function App() {
                 isDatePickerOpen={isDatePickerOpen}
                 mediaItems={mediaItems}
                 programs={programs}
-                saveError={scheduleSaveError}
-                saveState={scheduleSaveState}
                 selectedBlockId={selectedBlockId}
                 selectedDate={selectedDate}
                 selectedDateKey={selectedDateKey}
@@ -929,7 +947,12 @@ function App() {
                   const host = addHostByName(hosts, hostName)[hosts.length]
                   if (!host) return
                   const res = await apiFetch(`${apiBaseUrl}/hosts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(host) })
-                  if (res.ok) setHosts((current) => addHostByName(current, hostName))
+                  if (!res.ok) {
+                    toast.error(await responseError(res, 'Could not add host.'))
+                    return
+                  }
+                  setHosts((current) => addHostByName(current, hostName))
+                  toast.success('Host added')
                 }}
                 onBeginCreate={beginCreate}
                 onChangeCreationKind={(kind) => setCreationRequest((current) => (current ? { ...current, kind } : current))}
@@ -956,27 +979,44 @@ function App() {
                   const host = addHostByName(hosts, hostName)[hosts.length]
                   if (!host) return
                   const res = await apiFetch(`${apiBaseUrl}/hosts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(host) })
-                  if (res.ok) setHosts((current) => addHostByName(current, hostName))
+                  if (!res.ok) {
+                    toast.error(await responseError(res, 'Could not add host.'))
+                    return
+                  }
+                  setHosts((current) => addHostByName(current, hostName))
+                  toast.success('Host added')
                 }}
                 onCreateProgram={async (program) => {
                   const res = await apiFetch(`${apiBaseUrl}/programs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(program) })
-                  if (res.ok) { const data = (await res.json()) as { program: Program }; setPrograms((current) => [...current, data.program]) }
+                  if (!res.ok) {
+                    toast.error(await responseError(res, 'Could not create program.'))
+                    return
+                  }
+                  const data = (await res.json()) as { program: Program }
+                  setPrograms((current) => [...current, data.program])
+                  toast.success('Program created')
                 }}
                 onUpdateProgram={async (programId, program) => {
                   const res = await apiFetch(`${apiBaseUrl}/programs/${programId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(program) })
-                  if (res.ok) {
-                    const data = (await res.json()) as { program: Program } & ScheduleMutationResponse
-                    setPrograms((current) => current.map((item) => (item.id === programId ? data.program : item)))
-                    applyScheduleMutation(data)
+                  if (!res.ok) {
+                    toast.error(await responseError(res, 'Could not update program.'))
+                    return
                   }
+                  const data = (await res.json()) as { program: Program } & ScheduleMutationResponse
+                  setPrograms((current) => current.map((item) => (item.id === programId ? data.program : item)))
+                  applyScheduleMutation(data)
+                  toast.success('Program updated')
                 }}
                 onDeleteProgram={async (programId) => {
                   const res = await apiFetch(`${apiBaseUrl}/programs/${programId}`, { method: 'DELETE' })
-                  if (res.ok) {
-                    const data = (await res.json()) as ScheduleMutationResponse
-                    setPrograms((current) => current.filter((item) => item.id !== programId))
-                    applyScheduleMutation(data)
+                  if (!res.ok) {
+                    toast.error(await responseError(res, 'Could not delete program.'))
+                    return
                   }
+                  const data = (await res.json()) as ScheduleMutationResponse
+                  setPrograms((current) => current.filter((item) => item.id !== programId))
+                  applyScheduleMutation(data)
+                  toast.success('Program deleted')
                 }}
               />
             ) : activeView === 'hosts' ? (
@@ -984,22 +1024,35 @@ function App() {
                 hosts={hosts}
                 onAddHost={async (host) => {
                   const res = await apiFetch(`${apiBaseUrl}/hosts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(host) })
-                  if (res.ok) setHosts((current) => current.some((item) => item.name === host.name) ? current : [...current, host])
+                  if (!res.ok) {
+                    toast.error(await responseError(res, 'Could not add host.'))
+                    return
+                  }
+                  setHosts((current) => current.some((item) => item.name === host.name) ? current : [...current, host])
+                  toast.success('Host added')
                 }}
                 onRemoveHost={async (hostName) => {
                   const res = await apiFetch(`${apiBaseUrl}/hosts/${encodeURIComponent(hostName)}`, { method: 'DELETE' })
-                  if (res.ok) setHosts((current) => current.filter((item) => item.name !== hostName))
+                  if (!res.ok) {
+                    toast.error(await responseError(res, 'Could not remove host.'))
+                    return
+                  }
+                  setHosts((current) => current.filter((item) => item.name !== hostName))
+                  toast.success('Host removed')
                 }}
                 onUpdateHost={async (hostName, host) => {
                   const res = await apiFetch(`${apiBaseUrl}/hosts/${encodeURIComponent(hostName)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(host) })
-                  if (res.ok) {
-                    const data = (await res.json()) as { host: HostRecord } & ScheduleMutationResponse
-                    setHosts((current) => current.map((item) => (item.name === hostName ? host : item)))
-                    if (hostName !== host.name) {
-                      setPrograms((current) => current.map((item) => (item.host === hostName ? { ...item, host: host.name } : item)))
-                      applyScheduleMutation(data)
-                    }
+                  if (!res.ok) {
+                    toast.error(await responseError(res, 'Could not update host.'))
+                    return
                   }
+                  const data = (await res.json()) as { host: HostRecord } & ScheduleMutationResponse
+                  setHosts((current) => current.map((item) => (item.name === hostName ? host : item)))
+                  if (hostName !== host.name) {
+                    setPrograms((current) => current.map((item) => (item.host === hostName ? { ...item, host: host.name } : item)))
+                    applyScheduleMutation(data)
+                  }
+                  toast.success('Host updated')
                 }}
               />
             ) : activeView === 'media' ? (
@@ -1245,8 +1298,6 @@ function DailyCalendar({
   isMobileLayout,
   mediaItems,
   programs,
-  saveError,
-  saveState,
   selectedBlockId,
   selectedDate,
   selectedDateKey,
@@ -1279,8 +1330,6 @@ function DailyCalendar({
   isMobileLayout: boolean
   mediaItems: MediaItem[]
   programs: Program[]
-  saveError: string
-  saveState: 'idle' | 'saving' | 'saved'
   selectedBlockId: string | null
   selectedDate: Date
   selectedDateKey: string
@@ -1407,11 +1456,6 @@ function DailyCalendar({
             <ChevronRight aria-hidden="true" size={18} strokeWidth={1.8} />
           </button>
         </div>
-        {saveError ? (
-          <p className="schedule-save-message is-error">{saveError}</p>
-        ) : saveState !== 'idle' ? (
-          <p className="schedule-save-message">{saveState === 'saving' ? 'Saving schedule...' : 'Schedule saved'}</p>
-        ) : null}
       </div>
 
       <div className="daily-grid" ref={gridRef} aria-label={`${formatDayTitle(selectedDate)} schedule`}>
@@ -1813,6 +1857,7 @@ function CreationPanel({
             })
           } catch {
             setSaveError('Could not save slot. Please try again.')
+            toast.error('Could not save slot.')
           }
         })()
       }}
@@ -2263,6 +2308,7 @@ function MediaPage({
       setIsModalOpen(false)
     } catch {
       setError('Upload failed. Please try again.')
+      toast.error('Upload failed')
     } finally {
       setIsUploading(false)
     }
@@ -2345,7 +2391,10 @@ function MediaPage({
                 type="button"
                 onClick={() => {
                   setError('')
-                  void onDeleteMedia(item.id).catch(() => setError('Delete failed. Please try again.'))
+                  void onDeleteMedia(item.id).catch(() => {
+                    setError('Delete failed. Please try again.')
+                    toast.error('Delete failed')
+                  })
                 }}
                 aria-label={`Delete ${item.name}`}
               >
@@ -2400,6 +2449,7 @@ function BroadcastPage({ station }: { station: StationSummary }) {
       } catch {
         if (!cancelled) {
           setSettingsError('Broadcast credentials are unavailable.')
+          toast.error('Broadcast credentials are unavailable')
         }
       }
     }
