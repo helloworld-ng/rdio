@@ -77,20 +77,22 @@ export function PlayerBar({ channelName, programKind, programName, streamUrl }: 
       ref={dockRef}
       className={isBarVisible ? 'player-dock' : 'player-dock is-collapsed'}
     >
-      <button
-        className="player-bar-toggle"
-        type="button"
-        aria-controls="player-bar-panel"
-        aria-expanded={isBarVisible}
-        aria-label={isBarVisible ? 'Hide player' : 'Show player'}
-        onClick={() => setIsBarVisible((visible) => !visible)}
-      >
-        {isBarVisible ? (
-          <ChevronDown aria-hidden="true" size={16} strokeWidth={2} />
-        ) : (
-          <ChevronUp aria-hidden="true" size={16} strokeWidth={2} />
-        )}
-      </button>
+      {!isBarVisible ? (
+        <button
+          className="player-bar-toggle player-bar-toggle--dock"
+          type="button"
+          aria-controls="player-bar-panel"
+          aria-expanded={isBarVisible}
+          aria-label={isBarVisible ? 'Hide player' : 'Show player'}
+          onClick={() => setIsBarVisible((visible) => !visible)}
+        >
+          {isBarVisible ? (
+            <ChevronDown aria-hidden="true" size={16} strokeWidth={2} />
+          ) : (
+            <ChevronUp aria-hidden="true" size={16} strokeWidth={2} />
+          )}
+        </button>
+      ) : null}
       <footer id="player-bar-panel" className="player-bar" aria-label="Player">
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <audio
@@ -127,6 +129,22 @@ export function PlayerBar({ channelName, programKind, programName, streamUrl }: 
             ? <Pause aria-hidden="true" size={22} fill="currentColor" strokeWidth={2} />
             : <Play aria-hidden="true" size={22} fill="currentColor" strokeWidth={2} />
           }
+        </button>
+      </div>
+      <div className="player-bar-actions">
+        <button
+          className="player-bar-toggle player-bar-toggle--inline"
+          type="button"
+          aria-controls="player-bar-panel"
+          aria-expanded={isBarVisible}
+          aria-label={isBarVisible ? 'Hide player' : 'Show player'}
+          onClick={() => setIsBarVisible((visible) => !visible)}
+        >
+          {isBarVisible ? (
+            <ChevronDown aria-hidden="true" size={16} strokeWidth={2} />
+          ) : (
+            <ChevronUp aria-hidden="true" size={16} strokeWidth={2} />
+          )}
         </button>
       </div>
       </footer>

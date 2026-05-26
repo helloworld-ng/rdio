@@ -539,19 +539,6 @@ button {
   z-index: 5;
 }
 
-.schedule-save-message {
-  color: var(--color-muted);
-  font-size: 12px;
-  line-height: 16px;
-  margin: -4px 0 4px;
-  padding: 0 50px;
-}
-
-.schedule-save-message.is-error {
-  color: #b44132;
-  font-weight: 700;
-}
-
 .day-toggle {
   align-items: center;
   display: grid;
@@ -1968,6 +1955,11 @@ button {
   color: #ffffff;
 }
 
+.form-actions .primary-action:hover,
+.form-actions .primary-action:focus-visible {
+  color: #ffffff;
+}
+
 .library-view {
   gap: 10px;
   padding-top: 22px;
@@ -2311,6 +2303,25 @@ button {
   min-width: 0;
 }
 
+[data-sonner-toaster] {
+  --normal-bg: rgba(255, 255, 255, 0.5);
+  --normal-border: rgba(255, 255, 255, 0.62);
+  --normal-text: #233036;
+  --success-bg: rgba(255, 255, 255, 0.5);
+  --success-border: rgba(255, 255, 255, 0.62);
+  --success-text: #233036;
+  --error-bg: rgba(255, 255, 255, 0.5);
+  --error-border: rgba(255, 255, 255, 0.62);
+  --error-text: #233036;
+}
+
+[data-sonner-toast] {
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-radius: 14px !important;
+  box-shadow: 0 10px 28px rgba(23, 44, 51, 0.16);
+}
+
 @media (max-width: 620px) {
   .library-row.program-row .program-row-description {
     flex: 1 1 auto;
@@ -2446,16 +2457,23 @@ button {
   display: inline-flex;
   height: 34px;
   justify-content: center;
-  left: 50%;
   padding: 0;
-  position: absolute;
   width: 34px;
   z-index: 2;
 }
 
-.player-dock:not(.is-collapsed) .player-bar-toggle {
+.player-bar-toggle--dock {
+  left: 50%;
+  position: absolute;
+}
+
+.player-dock:not(.is-collapsed) .player-bar-toggle--dock {
   top: 0;
   transform: translate(-50%, -50%);
+}
+
+.player-bar-toggle--inline {
+  position: static;
 }
 
 .player-bar-toggle:hover,
@@ -2465,7 +2483,7 @@ button {
   outline: 0;
 }
 
-.player-dock.is-collapsed .player-bar-toggle {
+.player-dock.is-collapsed .player-bar-toggle--dock {
   bottom: 20px;
   top: auto;
   transform: translateX(-50%);
@@ -2487,7 +2505,7 @@ button {
   color: var(--color-player-current);
   display: grid;
   gap: 14px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
   height: 100%;
   padding: 0 16px;
   width: 100%;
@@ -2497,7 +2515,7 @@ button {
   align-items: center;
   display: inline-flex;
   gap: 18px;
-  justify-self: end;
+  justify-self: center;
 }
 
 .transport-controls button {
@@ -2515,6 +2533,11 @@ button {
 .transport-controls .play-toggle {
   height: 36px;
   width: 36px;
+}
+
+.player-bar-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .now-playing {
@@ -2590,7 +2613,7 @@ button {
 
   .player-bar {
     gap: 10px;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
     padding: 0 16px;
   }
 
@@ -2799,7 +2822,7 @@ button {
 
   .player-bar {
     gap: 6px;
-    grid-template-columns: minmax(0, 1fr) max-content;
+    grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
     padding: 0 12px;
   }
 

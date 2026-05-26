@@ -19,6 +19,7 @@ import {
   Users,
   X,
 } from 'lucide-react'
+import { Toaster, toast } from 'sonner'
 import { FileUploadField } from './components/FileUploadField'
 import { MediaSlotField } from './components/MediaSlotField'
 import { MediaPreviewThumb } from './components/MediaPreviewThumb'
@@ -437,6 +438,9 @@ function App() {
   const [isScheduleLoaded, setIsScheduleLoaded] = useState(false)
   const [scheduleSaveError, setScheduleSaveError] = useState('')
   const [scheduleSaveState, setScheduleSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const lastNotifiedSaveStateRef = useRef<'idle' | 'saving' | 'saved'>('idle')
+  const lastSaveErrorToastRef = useRef('')
+  const scheduleSaveToastRef = useRef<string | number | null>(null)
   const scheduleVersionRef = useRef<string | null>(null)
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
   const [mediaFilter, setMediaFilter] = useState<'all' | MediaItem['type']>('all')
@@ -509,6 +513,35 @@ function App() {
       ignore = true
     }
   }, [])
+
+  useEffect(() => {
+    if (scheduleSaveState === 'saving') {
+      if (scheduleSaveToastRef.current === null) {
+        scheduleSaveToastRef.current = toast.loading('Saving schedule...')
+      }
+    } else if (scheduleSaveToastRef.current !== null) {
+      toast.dismiss(scheduleSaveToastRef.current)
+      scheduleSaveToastRef.current = null
+    }
+
+    if (scheduleSaveState === 'saved' && lastNotifiedSaveStateRef.current === 'saving') {
+      toast.success('Schedule saved')
+    }
+
+    lastNotifiedSaveStateRef.current = scheduleSaveState
+  }, [scheduleSaveState])
+
+  useEffect(() => {
+    if (!scheduleSaveError) {
+      lastSaveErrorToastRef.current = ''
+      return
+    }
+
+    if (lastSaveErrorToastRef.current !== scheduleSaveError) {
+      toast.error(scheduleSaveError)
+      lastSaveErrorToastRef.current = scheduleSaveError
+    }
+  }, [scheduleSaveError])
 
   useEffect(() => {
     let ignore = false
@@ -946,8 +979,6 @@ function App() {
                 isDatePickerOpen={isDatePickerOpen}
                 mediaItems={mediaItems}
                 programs={programs}
-                saveError={scheduleSaveError}
-                saveState={scheduleSaveState}
                 selectedBlockId={selectedBlockId}
                 selectedDate={selectedDate}
                 selectedDateKey={selectedDateKey}
@@ -1049,6 +1080,7 @@ function App() {
           programName={playerProgramName}
           streamUrl={currentStation?.streamUrl ?? ''}
         />
+        <Toaster position="top-right" richColors />
       </section>
     </main>
   )
@@ -1271,8 +1303,6 @@ function DailyCalendar({
   isMobileLayout,
   mediaItems,
   programs,
-  saveError,
-  saveState,
   selectedBlockId,
   selectedDate,
   selectedDateKey,
@@ -1305,8 +1335,6 @@ function DailyCalendar({
   isMobileLayout: boolean
   mediaItems: MediaItem[]
   programs: Program[]
-  saveError: string
-  saveState: 'idle' | 'saving' | 'saved'
   selectedBlockId: string | null
   selectedDate: Date
   selectedDateKey: string
@@ -1432,11 +1460,6 @@ function DailyCalendar({
             <ChevronRight aria-hidden="true" size={18} strokeWidth={1.8} />
           </button>
         </div>
-        {saveError ? (
-          <p className="schedule-save-message is-error">{saveError}</p>
-        ) : saveState !== 'idle' ? (
-          <p className="schedule-save-message">{saveState === 'saving' ? 'Saving schedule...' : 'Schedule saved'}</p>
-        ) : null}
       </div>
 
       <div className="daily-grid" ref={gridRef} aria-label={`${formatDayTitle(selectedDate)} schedule`}>
