@@ -1199,6 +1199,14 @@ button {
   line-height: 18px;
 }
 
+.creation-form-divider {
+  background: #e6edef;
+  border: 0;
+  height: 1px;
+  margin: 3px 0;
+  width: 100%;
+}
+
 .creation-form-times {
   display: flex;
   gap: 11px;
@@ -1221,7 +1229,7 @@ button {
 .media-slot-field {
   align-content: start;
   border: 0;
-  gap: 12px;
+  gap: 6px;
   padding: 0;
 }
 
@@ -1233,13 +1241,6 @@ button {
   display: grid;
   gap: 6px;
   margin: 0;
-}
-
-.media-search-label > span {
-  color: var(--color-muted);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 16px;
 }
 
 .media-search-control {
@@ -1372,7 +1373,24 @@ button {
 
 .media-slot-selection {
   display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.media-slot-selection-header {
+  align-items: center;
+  display: flex;
   gap: 8px;
+  justify-content: space-between;
+  min-height: 16px;
+}
+
+.media-slot-label,
+.media-search-label > span {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
 }
 
 .media-slot-selection-card {
@@ -1388,8 +1406,8 @@ button {
 
 .media-slot-change {
   align-items: center;
-  align-self: start;
   background: transparent;
+  flex-shrink: 0;
   border: 0;
   color: var(--color-accent);
   cursor: pointer;

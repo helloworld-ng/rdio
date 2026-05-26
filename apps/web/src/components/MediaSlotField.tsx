@@ -72,6 +72,15 @@ export function MediaSlotField({
     <section className="media-slot-field">
       {hasSelection ? (
         <div className="media-slot-selection">
+          <div className="media-slot-selection-header">
+            <span className="media-slot-label">Media</span>
+            {!disabled ? (
+              <button className="media-slot-change" type="button" onClick={clearSelection}>
+                <RotateCcw aria-hidden="true" size={14} strokeWidth={1.8} />
+                Change
+              </button>
+            ) : null}
+          </div>
           <div className="media-slot-selection-card">
             {selectedItem ? (
               <MediaPreviewThumb apiBaseUrl={apiBaseUrl} name={selectedItem.name} type={selectedItem.type} url={selectedItem.url} />
@@ -85,12 +94,6 @@ export function MediaSlotField({
               </span>
             </div>
           </div>
-          {!disabled ? (
-            <button className="media-slot-change" type="button" onClick={clearSelection}>
-              <RotateCcw aria-hidden="true" size={14} strokeWidth={1.8} />
-              Change
-            </button>
-          ) : null}
           {playbackNotice ? (
             <p className="media-slot-notice" role="status">
               {PLAYBACK_NOTICE_COPY[playbackNotice]}

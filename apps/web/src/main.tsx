@@ -1945,22 +1945,6 @@ function CreationPanel({
             </button>
           </div>
         </fieldset>
-        <ProgramSearchSelect
-          disabled={isLocked}
-          options={programs.map((program) => ({ id: program.id, title: program.title }))}
-          selectedId={selectedProgramId}
-          onSelect={setSelectedProgramId}
-        />
-        <MultiSelect
-          label="Host"
-          options={hosts}
-          placeholder="Select hosts"
-          value={selectedHosts}
-          disabled={isLocked}
-          onChange={setSelectedHosts}
-          onCreateOption={isLocked ? undefined : onAddHost}
-          createPlaceholder="New host name"
-        />
         {!selectedProgramId ? (
           <label>
             <span>Title</span>
@@ -1994,6 +1978,23 @@ function CreationPanel({
             }}
           />
         ) : null}
+        <hr className="creation-form-divider" />
+        <ProgramSearchSelect
+          disabled={isLocked}
+          options={programs.map((program) => ({ id: program.id, title: program.title }))}
+          selectedId={selectedProgramId}
+          onSelect={setSelectedProgramId}
+        />
+        <MultiSelect
+          label="Host"
+          options={hosts}
+          placeholder="Select hosts"
+          value={selectedHosts}
+          disabled={isLocked}
+          onChange={setSelectedHosts}
+          onCreateOption={isLocked ? undefined : onAddHost}
+          createPlaceholder="New host name"
+        />
         <label>
           <span>Description</span>
           <textarea disabled={isLocked} value={description} onChange={(event) => setDescription(event.target.value)} />
