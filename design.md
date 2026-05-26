@@ -63,4 +63,3 @@ font-family: "Google Sans", "Product Sans", "Helvetica Neue", Arial, ui-sans-ser
 ## Sources
 
 - Bryan Clark, "Rdio, You'll Be Missed.", Medium, November 24, 2015: https://medium.com/@bryanjclark/rdio-you-ll-be-missed-4322d2e7fbc4
-- User-provided Rdio desktop screenshots in this thread.
