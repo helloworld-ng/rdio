@@ -65,7 +65,16 @@ interface StationSummary {
   streamUrl: string
   fallbackSource: FallbackSource
   icecast: IcecastSettings
-  broadcastIcecast: IcecastSettings
+  broadcastIcecast: IcecastSettings & { sourcePassword?: string }
+}
+
+function broadcastCredentialsFromStation(station: StationSummary): BroadcastIcecastSettings | null {
+  const { sourcePassword, host, port, mount } = station.broadcastIcecast
+  if (!sourcePassword) {
+    return null
+  }
+
+  return { host, port, mount, sourcePassword }
 }
 
 interface StationResponse {
@@ -2460,10 +2469,13 @@ function MediaPage({
 
 function BroadcastPage({ station }: { station: StationSummary }) {
   const [isConnected, setIsConnected] = useState(false)
-  const [broadcastSettings, setBroadcastSettings] = useState<BroadcastIcecastSettings | null>(null)
+  const [broadcastSettings, setBroadcastSettings] = useState<BroadcastIcecastSettings | null>(
+    () => broadcastCredentialsFromStation(station),
+  )
   const [settingsError, setSettingsError] = useState('')
   const icecast = broadcastSettings ?? station.broadcastIcecast
   const mount = icecast.mount.replace(/^\//, '')
+  const sourcePassword = broadcastSettings?.sourcePassword
 
   useEffect(() => {
     let cancelled = false
@@ -2487,6 +2499,12 @@ function BroadcastPage({ station }: { station: StationSummary }) {
     async function loadBroadcastSettings() {
       try {
         const res = await apiFetch(`${apiBaseUrl}/broadcast/settings`)
+        if (res.status === 404) {
+          if (!cancelled && !broadcastCredentialsFromStation(station)) {
+            setSettingsError('Broadcast credentials are unavailable. Redeploy the API.')
+          }
+          return
+        }
         if (!res.ok) {
           throw new Error(`Broadcast settings request failed with ${res.status}`)
         }
@@ -2497,8 +2515,11 @@ function BroadcastPage({ station }: { station: StationSummary }) {
           setSettingsError('')
         }
       } catch {
-        if (!cancelled) {
-          setSettingsError('Broadcast credentials are unavailable.')
+        if (!cancelled && !broadcastCredentialsFromStation(station)) {
+          const hint = apiKey
+            ? 'Check that VITE_API_KEY matches API_KEY and redeploy the web app.'
+            : 'Set VITE_API_KEY to match API_KEY, or redeploy the API.'
+          setSettingsError(`Broadcast credentials are unavailable. ${hint}`)
         }
       }
     }
@@ -2508,7 +2529,7 @@ function BroadcastPage({ station }: { station: StationSummary }) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [station])
 
   return (
     <section className="broadcast-view" aria-label="Broadcast">
@@ -2534,7 +2555,10 @@ function BroadcastPage({ station }: { station: StationSummary }) {
             <SettingsRow label="Address" value={icecast.host} />
             <SettingsRow label="Port" value={String(icecast.port)} />
             <SettingsRow label="User" value="source" />
-            <SettingsRow label="Password" value={broadcastSettings?.sourcePassword ?? 'Requires API key'} />
+            <SettingsRow
+              label="Password"
+              value={sourcePassword ?? (apiKey ? 'Requires API key' : 'Unavailable')}
+            />
             <SettingsRow label="Mount" value={mount} />
           </div>
         </section>
