@@ -8,11 +8,13 @@ export interface MediaSearchOption {
 }
 
 export function MediaSearchSelect({
+  disabled = false,
   options,
   selectedId,
   onSelect,
   onUploadClick,
 }: {
+  disabled?: boolean
   options: MediaSearchOption[]
   selectedId: string | null
   onSelect: (id: string) => void
@@ -71,6 +73,7 @@ export function MediaSearchSelect({
             aria-autocomplete="list"
             aria-controls={listboxId}
             aria-expanded={isOpen}
+            disabled={disabled}
             placeholder="Search library…"
             role="combobox"
             type="search"
@@ -79,7 +82,9 @@ export function MediaSearchSelect({
               setQuery(event.target.value)
               setIsOpen(true)
             }}
-            onFocus={() => setIsOpen(true)}
+            onFocus={() => {
+              if (!disabled) setIsOpen(true)
+            }}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && filteredOptions.length > 0) {
                 event.preventDefault()
@@ -91,7 +96,7 @@ export function MediaSearchSelect({
           />
         </div>
       </label>
-      {isOpen ? (
+      {isOpen && !disabled ? (
         <div className="media-search-menu" id={listboxId} role="listbox">
           {options.length === 0 ? (
             <p className="media-search-empty">No media in the library yet.</p>

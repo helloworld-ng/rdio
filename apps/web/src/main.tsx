@@ -19,7 +19,6 @@ import {
   Users,
   X,
 } from 'lucide-react'
-import { Toaster, toast } from 'sonner'
 import { FileUploadField } from './components/FileUploadField'
 import { MediaSlotField } from './components/MediaSlotField'
 import { MediaPreviewThumb } from './components/MediaPreviewThumb'
@@ -404,6 +403,10 @@ function blockConflictsWith(blocks: ScheduleBlock[], movingBlockId: string, next
   })
 }
 
+function isBlockPastOrCurrent(block: ScheduleBlock, todayDateKey: string, nowMinutes: number) {
+  return block.dateKey < todayDateKey || (block.dateKey === todayDateKey && block.startMinutes <= nowMinutes)
+}
+
 function buildDragDropPreview(
   blocks: ScheduleBlock[],
   draggedBlockId: string,
@@ -491,9 +494,6 @@ function App() {
   const [isScheduleLoaded, setIsScheduleLoaded] = useState(false)
   const [scheduleSaveError, setScheduleSaveError] = useState('')
   const [scheduleSaveState, setScheduleSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
-  const lastNotifiedSaveStateRef = useRef<'idle' | 'saving' | 'saved'>('idle')
-  const lastSaveErrorToastRef = useRef('')
-  const scheduleSaveToastRef = useRef<string | number | null>(null)
   const scheduleVersionRef = useRef<string | null>(null)
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
   const [mediaFilter, setMediaFilter] = useState<'all' | MediaItem['type']>('all')
@@ -571,35 +571,6 @@ function App() {
       ignore = true
     }
   }, [])
-
-  useEffect(() => {
-    if (scheduleSaveState === 'saving') {
-      if (scheduleSaveToastRef.current === null) {
-        scheduleSaveToastRef.current = toast.loading('Saving schedule...')
-      }
-    } else if (scheduleSaveToastRef.current !== null) {
-      toast.dismiss(scheduleSaveToastRef.current)
-      scheduleSaveToastRef.current = null
-    }
-
-    if (scheduleSaveState === 'saved' && lastNotifiedSaveStateRef.current === 'saving') {
-      toast.success('Schedule saved')
-    }
-
-    lastNotifiedSaveStateRef.current = scheduleSaveState
-  }, [scheduleSaveState])
-
-  useEffect(() => {
-    if (!scheduleSaveError) {
-      lastSaveErrorToastRef.current = ''
-      return
-    }
-
-    if (lastSaveErrorToastRef.current !== scheduleSaveError) {
-      toast.error(scheduleSaveError)
-      lastSaveErrorToastRef.current = scheduleSaveError
-    }
-  }, [scheduleSaveError])
 
   useEffect(() => {
     let ignore = false
@@ -916,7 +887,7 @@ function App() {
     setDragDropPreview(null)
   }
 
-  const beginCreate = (hour: number, kind: ScheduleBlock['kind'] | null = null) => {
+  const beginCreate = (hour: number, kind: ScheduleBlock['kind'] | null = 'recording') => {
     setCreationRequest({ dateKey: selectedDateKey, hour, kind })
     setSelectedBlockId(null)
   }
@@ -1139,7 +1110,6 @@ function App() {
           programName={playerProgramName}
           streamUrl={currentStation?.streamUrl ?? ''}
         />
-        <Toaster position="top-right" richColors />
       </section>
     </main>
   )
@@ -1272,14 +1242,10 @@ function findMediaIdForFile(file: UploadedFileSummary | undefined, mediaItems: M
 
 function slotPanelTitle(request: CreationRequest | null, editingBlock?: ScheduleBlock) {
   if (editingBlock) {
-    return 'Edit slot'
+    return 'Edit Slot'
   }
 
-  if (!request?.kind) {
-    return 'Add to schedule'
-  }
-
-  return request.kind === 'broadcast' ? 'Live Broadcast' : 'New Recording'
+  return 'New Slot'
 }
 
 function ScheduleSlotPanel({
@@ -1424,8 +1390,12 @@ function DailyCalendar({
   const canvasRef = useRef<HTMLDivElement>(null)
   const lastFocusNowTokenRef = useRef(0)
   const [nowIndicator, setNowIndicator] = useState<{ time: string; top: number } | null>(null)
+  const nowMinutes = getNowMinutes(new Date(), stationTimeZone)
 
   const selectedBlock = selectedBlockId ? blocks.find((block) => block.id === selectedBlockId) : undefined
+  const isSelectedBlockLocked = selectedBlock
+    ? isBlockPastOrCurrent(selectedBlock, todayDateKey, nowMinutes)
+    : false
   const editingBlock = creationRequest ? undefined : selectedBlock
   const activeRequest =
     creationRequest ??
@@ -1651,6 +1621,7 @@ function DailyCalendar({
             hosts={hosts}
             key={editingBlock?.id ?? `${activeRequest.dateKey}-${activeRequest.hour}-${activeRequest.kind ?? 'pick'}`}
             mediaItems={mediaItems}
+            isLocked={isSelectedBlockLocked}
             programs={programs}
             request={activeRequest}
             onAddHost={onAddHost}
@@ -1734,6 +1705,7 @@ function CreationPanel({
   className,
   editingBlock,
   hosts,
+  isLocked,
   mediaItems,
   programs,
   request,
@@ -1746,6 +1718,7 @@ function CreationPanel({
   className?: string
   editingBlock?: ScheduleBlock
   hosts: string[]
+  isLocked: boolean
   mediaItems: MediaItem[]
   programs: Program[]
   request: CreationRequest
@@ -1757,8 +1730,10 @@ function CreationPanel({
 }) {
   const defaultStartMinutes = request.hour * 60
   const defaultEndMinutes = Math.min(1439, defaultStartMinutes + 60)
+  const initialKind = editingBlock?.kind ?? request.kind ?? 'recording'
   const initialMediaId = editingBlock?.mediaId ?? findMediaIdForFile(editingBlock?.file, mediaItems)
-  const [title, setTitle] = useState(editingBlock?.title ?? (request.kind === 'broadcast' ? 'Live Broadcast' : 'New Recording'))
+  const [slotKind, setSlotKind] = useState<ScheduleBlock['kind']>(initialKind)
+  const [title, setTitle] = useState(editingBlock?.title ?? (initialKind === 'broadcast' ? 'Live Broadcast' : 'New Recording'))
   const [description, setDescription] = useState(editingBlock?.description ?? '')
   const [startTime, setStartTime] = useState(minutesToTimeInput(editingBlock?.startMinutes ?? defaultStartMinutes))
   const [endTime, setEndTime] = useState(minutesToTimeInput(editingBlock?.endMinutes ?? defaultEndMinutes))
@@ -1769,6 +1744,7 @@ function CreationPanel({
   const [mediaDuration, setMediaDuration] = useState<number | undefined>(editingBlock?.file?.duration)
   const [saveError, setSaveError] = useState('')
   const selectedProgram = programs.find((program) => program.id === selectedProgramId)
+  const appliedProgramIdRef = useRef(editingBlock?.programId ?? '')
 
   // Load duration from library item URL when selection changes
   useEffect(() => {
@@ -1815,22 +1791,43 @@ function CreationPanel({
       return
     }
 
-    setTitle(request.kind === 'broadcast' ? 'Live Broadcast' : 'New Recording')
+    setSlotKind(request.kind ?? 'recording')
   }, [editingBlock, request.kind])
 
   useEffect(() => {
-    if (editingBlock || !selectedProgram) {
+    if (editingBlock) {
       return
     }
 
+    setTitle((currentTitle) => {
+      if (currentTitle !== 'Live Broadcast' && currentTitle !== 'New Recording' && currentTitle.trim() !== '') {
+        return currentTitle
+      }
+
+      return slotKind === 'broadcast' ? 'Live Broadcast' : 'New Recording'
+    })
+  }, [editingBlock, slotKind])
+
+  useEffect(() => {
+    if (!selectedProgram) {
+      appliedProgramIdRef.current = ''
+      return
+    }
+
+    if (isLocked || appliedProgramIdRef.current === selectedProgram.id) {
+      return
+    }
+
+    appliedProgramIdRef.current = selectedProgram.id
     setTitle(selectedProgram.title)
     setDescription(selectedProgram.description)
     setSelectedHosts([selectedProgram.host])
-  }, [editingBlock, selectedProgram])
+  }, [isLocked, selectedProgram])
 
+  const kind = slotKind
   const selectedAudioItem = selectedMediaId ? mediaItems.find((entry) => entry.id === selectedMediaId) : undefined
   const hasAudioSelection =
-    request.kind === 'recording' &&
+    kind === 'recording' &&
     ((mediaFile?.type.startsWith('audio/') ?? false) ||
       selectedAudioItem?.type === 'audio' ||
       Boolean(editingBlock?.mediaId && editingBlock.file && !mediaFile && !selectedMediaId))
@@ -1838,37 +1835,7 @@ function CreationPanel({
     ? mediaPlaybackNotice(slotDurationSeconds(startTime, endTime), mediaDuration)
     : null
 
-  if (!request.kind) {
-    return (
-      <div className={[className, 'creation-choice'].filter(Boolean).join(' ')}>
-        <button type="button" onClick={() => onChangeKind('broadcast')}>
-          <Mic2 aria-hidden="true" size={15} strokeWidth={1.8} />
-          Live Broadcast
-        </button>
-        <button type="button" onClick={() => onChangeKind('recording')}>
-          <ListMusic aria-hidden="true" size={15} strokeWidth={1.8} />
-          Recording
-        </button>
-      </div>
-    )
-  }
-
-  const kind = request.kind
   const isEditing = Boolean(editingBlock)
-  const linkedProgram = editingBlock?.programId ? programs.find((program) => program.id === editingBlock.programId) : undefined
-  const programContext = isEditing ? linkedProgram : selectedProgram
-  const showBroadcastProgramDetails = kind === 'broadcast' && (isEditing || Boolean(selectedProgram))
-  const showDescriptionField = !isEditing
-  const mediaSlotMetadata =
-    kind === 'recording' && (isEditing || selectedProgram)
-      ? {
-          programTitle: isEditing ? editingBlock!.title : selectedProgram!.title,
-          description: isEditing ? editingBlock!.description : selectedProgram!.description,
-          author: isEditing
-            ? editingBlock!.hosts.join(', ') || linkedProgram?.host || ''
-            : selectedProgram!.host,
-        }
-      : undefined
 
   const resolveMediaSelection = async () => {
     if (kind !== 'recording') {
@@ -1917,13 +1884,15 @@ function CreationPanel({
             const startMinutes = timeInputToMinutes(startTime)
             const rawEndMinutes = timeInputToMinutes(endTime)
             const endMinutes = rawEndMinutes > startMinutes ? rawEndMinutes : Math.min(1439, startMinutes + 30)
-            const nextHosts = isEditing
-              ? editingBlock!.hosts
-              : selectedHosts.map((host) => host.trim()).filter(Boolean)
+            if (isLocked) {
+              setSaveError('Past and current events can only be deleted.')
+              return
+            }
+
+            const nextHosts = selectedHosts.map((host) => host.trim()).filter(Boolean)
 
             if (nextHosts.length === 0) {
               setSaveError('Choose at least one host.')
-              toast.error('Choose at least one host.')
               return
             }
 
@@ -1931,14 +1900,12 @@ function CreationPanel({
 
             onSave({
               kind,
-              title: isEditing
-                ? editingBlock!.title
-                : title.trim() || (kind === 'broadcast' ? 'Live Broadcast' : 'New Recording'),
-              description: isEditing ? editingBlock!.description : description.trim(),
+              title: title.trim() || (kind === 'broadcast' ? 'Live Broadcast' : 'New Recording'),
+              description: description.trim(),
               startMinutes,
               endMinutes,
               hosts: nextHosts,
-              programId: isEditing ? editingBlock!.programId : selectedProgram?.id,
+              programId: selectedProgramId || undefined,
               file: mediaSelection.file,
               mediaId: mediaSelection.mediaId,
             })
@@ -1949,83 +1916,73 @@ function CreationPanel({
       }}
     >
       <div className="creation-form-body">
-        {!isEditing ? (
-          <>
-            <ProgramSearchSelect
-              options={programs.map((program) => ({ id: program.id, title: program.title }))}
-              selectedId={selectedProgramId}
-              onSelect={setSelectedProgramId}
-            />
-            <MultiSelect
-              label="Host"
-              options={hosts}
-              placeholder="Select hosts"
-              value={selectedHosts}
-              disabled={false}
-              onChange={setSelectedHosts}
-              onCreateOption={onAddHost}
-              createPlaceholder="New host name"
-            />
-            <label>
-              <span>Title</span>
-              <input value={title} onChange={(event) => setTitle(event.target.value)} />
-            </label>
-          </>
+        <fieldset className="slot-kind-field">
+          <legend>Type</legend>
+          <div className="slot-kind-toggle">
+            <button
+              className={kind === 'recording' ? 'is-selected' : ''}
+              disabled={isLocked}
+              type="button"
+              onClick={() => {
+                setSlotKind('recording')
+                onChangeKind('recording')
+              }}
+            >
+              <ListMusic aria-hidden="true" size={14} strokeWidth={1.8} />
+              Recording
+            </button>
+            <button
+              className={kind === 'broadcast' ? 'is-selected' : ''}
+              disabled={isLocked}
+              type="button"
+              onClick={() => {
+                setSlotKind('broadcast')
+                onChangeKind('broadcast')
+              }}
+            >
+              <Mic2 aria-hidden="true" size={14} strokeWidth={1.8} />
+              Broadcast
+            </button>
+          </div>
+        </fieldset>
+        <ProgramSearchSelect
+          disabled={isLocked}
+          options={programs.map((program) => ({ id: program.id, title: program.title }))}
+          selectedId={selectedProgramId}
+          onSelect={setSelectedProgramId}
+        />
+        <MultiSelect
+          label="Host"
+          options={hosts}
+          placeholder="Select hosts"
+          value={selectedHosts}
+          disabled={isLocked}
+          onChange={setSelectedHosts}
+          onCreateOption={isLocked ? undefined : onAddHost}
+          createPlaceholder="New host name"
+        />
+        {!selectedProgramId ? (
+          <label>
+            <span>Title</span>
+            <input disabled={isLocked} value={title} onChange={(event) => setTitle(event.target.value)} />
+          </label>
         ) : null}
         <div className="creation-form-times">
           <label>
             <span>Start time</span>
-            <input type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
+            <input disabled={isLocked} type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
           </label>
           <label>
             <span>End time</span>
-            <input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
+            <input disabled={isLocked} type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
           </label>
         </div>
-        {showBroadcastProgramDetails ? (
-          (() => {
-            const detailsProgramTitle = (isEditing ? editingBlock!.title : programContext!.title).trim()
-            const detailsHost = (isEditing ? editingBlock!.hosts.join(', ') || programContext!.host : programContext!.host).trim()
-            const detailsDescription = (isEditing ? editingBlock!.description : programContext!.description).trim()
-            const hasDetails = Boolean(detailsProgramTitle || detailsHost || detailsDescription)
-
-            if (!hasDetails) {
-              return null
-            }
-
-            return (
-              <div className="slot-program-details">
-                <div className="media-slot-divider" role="separator" />
-                <div className="media-slot-meta">
-                  {detailsProgramTitle ? (
-                    <div className="media-slot-meta-item">
-                      <span>Program</span>
-                      <p>{detailsProgramTitle}</p>
-                    </div>
-                  ) : null}
-                  {detailsHost ? (
-                    <div className="media-slot-meta-item">
-                      <span>Host</span>
-                      <p>{detailsHost}</p>
-                    </div>
-                  ) : null}
-                  {detailsDescription ? (
-                    <div className="media-slot-meta-item">
-                      <span>About</span>
-                      <p>{detailsDescription}</p>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            )
-          })()
-        ) : null}
         {kind === 'recording' ? (
           <MediaSlotField
+            disabled={isLocked}
             mediaItems={mediaItems}
             playbackNotice={playbackNotice}
             selectedMediaId={selectedMediaId}
-            slotMetadata={mediaSlotMetadata}
             uploadFile={mediaFile}
             onSelectMedia={setSelectedMediaId}
             onChangeUploadFile={(nextFile) => {
@@ -2037,25 +1994,25 @@ function CreationPanel({
             }}
           />
         ) : null}
-        {showDescriptionField ? (
-          <label>
-            <span>Description</span>
-            <textarea value={description} onChange={(event) => setDescription(event.target.value)} />
-          </label>
-        ) : null}
+        <label>
+          <span>Description</span>
+          <textarea disabled={isLocked} value={description} onChange={(event) => setDescription(event.target.value)} />
+        </label>
       </div>
       {saveError ? <p className="form-error">{saveError}</p> : null}
-      <div className={['form-actions', 'creation-form-actions', isEditing ? 'form-actions--split' : ''].filter(Boolean).join(' ')}>
+      <div className={['form-actions', isEditing ? 'form-actions--split' : ''].filter(Boolean).join(' ')}>
         {isEditing && onDelete ? (
           <button className="form-actions-delete" type="button" onClick={onDelete}>
             Delete
           </button>
         ) : null}
-        <div className="form-actions-end">
-          <button className="primary-action" type="submit">
-            {editingBlock ? 'Update' : 'Save'}
-          </button>
-        </div>
+        {!isLocked ? (
+          <div className="form-actions-end">
+            <button className="primary-action" type="submit">
+              {editingBlock ? 'Update' : 'Save'}
+            </button>
+          </div>
+        ) : null}
       </div>
     </form>
   )

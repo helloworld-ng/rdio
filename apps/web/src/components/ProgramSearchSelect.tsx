@@ -7,10 +7,12 @@ export interface ProgramSearchOption {
 }
 
 export function ProgramSearchSelect({
+  disabled = false,
   options,
   selectedId,
   onSelect,
 }: {
+  disabled?: boolean
   options: ProgramSearchOption[]
   selectedId: string
   onSelect: (id: string) => void
@@ -20,6 +22,7 @@ export function ProgramSearchSelect({
   const inputRef = useRef<HTMLInputElement>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const selectedOption = useMemo(() => options.find((option) => option.id === selectedId), [options, selectedId])
 
   const filteredOptions = useMemo(() => {
     const normalized = query.trim().toLowerCase()
@@ -30,6 +33,10 @@ export function ProgramSearchSelect({
 
     return options.filter((option) => option.title.toLowerCase().includes(normalized))
   }, [options, query])
+
+  useEffect(() => {
+    setQuery(selectedOption?.title ?? '')
+  }, [selectedOption?.title])
 
   useEffect(() => {
     if (!isOpen) {
@@ -68,6 +75,7 @@ export function ProgramSearchSelect({
             aria-autocomplete="list"
             aria-controls={listboxId}
             aria-expanded={isOpen}
+            disabled={disabled}
             placeholder="Search programs…"
             role="combobox"
             type="search"
@@ -76,19 +84,21 @@ export function ProgramSearchSelect({
               setQuery(event.target.value)
               setIsOpen(true)
             }}
-            onFocus={() => setIsOpen(true)}
+            onFocus={() => {
+              if (!disabled) setIsOpen(true)
+            }}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && filteredOptions.length > 0) {
                 event.preventDefault()
                 onSelect(filteredOptions[0].id)
-                setQuery('')
+                setQuery(filteredOptions[0].title)
                 setIsOpen(false)
               }
             }}
           />
         </div>
       </label>
-      {isOpen ? (
+      {isOpen && !disabled ? (
         <div className="media-search-menu" id={listboxId} role="listbox">
           <button
             aria-selected={selectedId === ''}
@@ -123,7 +133,7 @@ export function ProgramSearchSelect({
                   type="button"
                   onClick={() => {
                     onSelect(option.id)
-                    setQuery('')
+                    setQuery(option.title)
                     setIsOpen(false)
                   }}
                 >

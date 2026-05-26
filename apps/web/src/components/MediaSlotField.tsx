@@ -14,12 +14,6 @@ interface MediaLibraryItem {
   url: string
 }
 
-export interface SlotMetadata {
-  programTitle: string
-  description: string
-  author: string
-}
-
 export type MediaPlaybackNotice = 'loop' | 'truncate'
 
 const PLAYBACK_NOTICE_COPY: Record<MediaPlaybackNotice, string> = {
@@ -32,19 +26,19 @@ function inferUploadType(file: File): 'audio' | 'image' {
 }
 
 export function MediaSlotField({
+  disabled = false,
   mediaItems,
   playbackNotice,
   selectedMediaId,
   uploadFile,
-  slotMetadata,
   onSelectMedia,
   onChangeUploadFile,
 }: {
+  disabled?: boolean
   mediaItems: MediaLibraryItem[]
   playbackNotice?: MediaPlaybackNotice | null
   selectedMediaId: string | null
   uploadFile: File | null
-  slotMetadata?: SlotMetadata
   onSelectMedia: (mediaId: string | null) => void
   onChangeUploadFile: (file: File | null) => void
 }) {
@@ -54,12 +48,12 @@ export function MediaSlotField({
     [mediaItems, selectedMediaId],
   )
   const hasSelection = Boolean(selectedItem || uploadFile)
-  const programTitle = slotMetadata?.programTitle.trim() ?? ''
-  const author = slotMetadata?.author.trim() ?? ''
-  const description = slotMetadata?.description.trim() ?? ''
-  const hasMetadata = Boolean(programTitle || author || description)
 
   const clearSelection = () => {
+    if (disabled) {
+      return
+    }
+
     onSelectMedia(null)
     onChangeUploadFile(null)
   }
@@ -76,28 +70,6 @@ export function MediaSlotField({
 
   return (
     <section className="media-slot-field">
-      {hasMetadata ? (
-        <div className="media-slot-meta">
-          {programTitle ? (
-            <div className="media-slot-meta-item">
-              <span>Program</span>
-              <p>{programTitle}</p>
-            </div>
-          ) : null}
-          {author ? (
-            <div className="media-slot-meta-item">
-              <span>Host</span>
-              <p>{author}</p>
-            </div>
-          ) : null}
-          {description ? (
-            <div className="media-slot-meta-item">
-              <span>About</span>
-              <p>{description}</p>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
       {hasSelection ? (
         <div className="media-slot-selection">
           <div className="media-slot-selection-card">
@@ -113,10 +85,12 @@ export function MediaSlotField({
               </span>
             </div>
           </div>
-          <button className="media-slot-change" type="button" onClick={clearSelection}>
-            <RotateCcw aria-hidden="true" size={14} strokeWidth={1.8} />
-            Change
-          </button>
+          {!disabled ? (
+            <button className="media-slot-change" type="button" onClick={clearSelection}>
+              <RotateCcw aria-hidden="true" size={14} strokeWidth={1.8} />
+              Change
+            </button>
+          ) : null}
           {playbackNotice ? (
             <p className="media-slot-notice" role="status">
               {PLAYBACK_NOTICE_COPY[playbackNotice]}
@@ -125,6 +99,7 @@ export function MediaSlotField({
         </div>
       ) : (
         <MediaSearchSelect
+          disabled={disabled}
           options={mediaItems.map((item) => ({ id: item.id, name: item.name, type: item.type }))}
           selectedId={selectedMediaId}
           onSelect={(id) => {
@@ -145,6 +120,10 @@ export function MediaSlotField({
           event.target.value = ''
 
           if (nextFile) {
+            if (disabled) {
+              return
+            }
+
             onSelectMedia(null)
             onChangeUploadFile(nextFile)
           }
