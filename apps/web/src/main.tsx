@@ -27,6 +27,7 @@ import { HostAvatar, hostPalette } from './components/HostAvatar'
 import type { HostRecord } from './components/HostsPage'
 import { HostsPage } from './components/HostsPage'
 import { MultiSelect } from './components/MultiSelect'
+import { ProgramSearchSelect } from './components/ProgramSearchSelect'
 import { UserAccountMenu } from './components/UserAccountMenu'
 import { PlayerBar } from './components/PlayerBar'
 import { mockAnchorDate } from './data/mockStation'
@@ -36,6 +37,7 @@ import './styles.css'
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001'
 const apiKey = import.meta.env.VITE_API_KEY as string | undefined
 const hours = Array.from({ length: 24 }, (_, hour) => hour)
+const defaultTimeZone = 'UTC'
 
 async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers as HeadersInit)
@@ -138,6 +140,7 @@ interface CreationRequest {
 type ViewName = 'schedule' | 'programs' | 'hosts' | 'media' | 'broadcast' | 'settings'
 
 const MOBILE_SIDEBAR_QUERY = '(max-width: 620px)'
+const sidebarStorageKey = 'rdio.sidebar.visible'
 
 function mediaUrl(url: string) {
   return url.startsWith('http') ? url : `${apiBaseUrl}${url}`
@@ -146,6 +149,20 @@ function mediaUrl(url: string) {
 function readInitialSidebarVisible() {
   if (typeof window === 'undefined') {
     return true
+  }
+
+  try {
+    const savedValue = window.localStorage.getItem(sidebarStorageKey)
+
+    if (savedValue === 'true') {
+      return true
+    }
+
+    if (savedValue === 'false') {
+      return false
+    }
+  } catch {
+    // Storage can be unavailable in private contexts; fall back to viewport defaults.
   }
 
   return !window.matchMedia(MOBILE_SIDEBAR_QUERY).matches
@@ -179,6 +196,35 @@ function formatDateKey(date: Date) {
   return `${year}-${month}-${day}`
 }
 
+function stationClockParts(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    day: '2-digit',
+    hour: '2-digit',
+    hour12: false,
+    hourCycle: 'h23',
+    minute: '2-digit',
+    month: '2-digit',
+    second: '2-digit',
+    timeZone,
+    year: 'numeric',
+  }).formatToParts(date)
+  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '00'
+
+  return {
+    day: value('day'),
+    hour: value('hour'),
+    minute: value('minute'),
+    month: value('month'),
+    second: value('second'),
+    year: value('year'),
+  }
+}
+
+function formatDateKeyInTimeZone(date: Date, timeZone: string) {
+  const parts = stationClockParts(date, timeZone)
+  return `${parts.year}-${parts.month}-${parts.day}`
+}
+
 function programTitleForBlock(block: ScheduleBlock | undefined, programs: Program[]) {
   if (!block) {
     return undefined
@@ -198,6 +244,10 @@ function programTitleForBlock(block: ScheduleBlock | undefined, programs: Progra
 function dateFromKey(dateKey: string) {
   const [year, month, day] = dateKey.split('-').map(Number)
   return new Date(year, month - 1, day)
+}
+
+function dateInTimeZone(date: Date, timeZone: string) {
+  return dateFromKey(formatDateKeyInTimeZone(date, timeZone))
 }
 
 function formatDayTitle(date: Date) {
@@ -282,24 +332,18 @@ function addDays(date: Date, offset: number) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate() + offset)
 }
 
-function isSameCalendarDay(left: Date, right: Date) {
-  return (
-    left.getFullYear() === right.getFullYear() &&
-    left.getMonth() === right.getMonth() &&
-    left.getDate() === right.getDate()
-  )
-}
-
-function formatNowClock(date = new Date()) {
+function formatNowClock(date = new Date(), timeZone = defaultTimeZone) {
   return new Intl.DateTimeFormat(undefined, {
     hour: 'numeric',
     minute: '2-digit',
     second: '2-digit',
+    timeZone,
   }).format(date)
 }
 
-function getNowMinutes(date = new Date()) {
-  return date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60
+function getNowMinutes(date = new Date(), timeZone = defaultTimeZone) {
+  const parts = stationClockParts(date, timeZone)
+  return Number(parts.hour) * 60 + Number(parts.minute) + Number(parts.second) / 60
 }
 
 function getMinutesOffsetInGrid(grid: HTMLElement, minutes: number) {
@@ -429,6 +473,15 @@ function App() {
 
     return () => media.removeEventListener('change', syncMobileSidebar)
   }, [])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(sidebarStorageKey, String(isSidebarVisible))
+    } catch {
+      // Ignore unavailable local storage.
+    }
+  }, [isSidebarVisible])
+
   const [selectedDate, setSelectedDate] = useState(() => new Date(mockAnchorDate))
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
   const [datePickerMonth, setDatePickerMonth] = useState(
@@ -452,6 +505,8 @@ function App() {
   const [dragDropPreview, setDragDropPreview] = useState<DragDropPreview | null>(null)
   const [scheduleFocusToken, setScheduleFocusToken] = useState(1)
   const [nowTick, setNowTick] = useState(0)
+  const currentStation = stations[0] ?? null
+  const stationTimeZone = currentStation?.timezone ?? defaultTimeZone
 
   useEffect(() => {
     const interval = window.setInterval(() => setNowTick((tick) => tick + 1), 60_000)
@@ -460,13 +515,13 @@ function App() {
   }, [])
 
   const focusScheduleNow = useCallback(() => {
-    const today = new Date()
+    const today = dateInTimeZone(new Date(), stationTimeZone)
     setSelectedDate(today)
     setDatePickerMonth(new Date(today.getFullYear(), today.getMonth(), 1))
     setScheduleFocusToken((token) => token + 1)
     setCreationRequest(null)
     setSelectedBlockId(null)
-  }, [])
+  }, [stationTimeZone])
 
   useEffect(() => {
     const handlePopState = () => {
@@ -497,6 +552,9 @@ function App() {
 
         if (!ignore) {
           setStations([data.station])
+          const stationToday = dateInTimeZone(new Date(), data.station.timezone)
+          setSelectedDate(stationToday)
+          setDatePickerMonth(new Date(stationToday.getFullYear(), stationToday.getMonth(), 1))
           setStationLoadFailed(false)
         }
       } catch {
@@ -680,23 +738,22 @@ function App() {
     }
   }, [])
 
-  const currentStation = stations[0] ?? null
   const stationName = currentStation?.name ?? '16 Radio'
   const selectedDateKey = formatDateKey(selectedDate)
   const dayBlocks = useMemo(
     () => blocks.filter((block) => block.dateKey === selectedDateKey).sort((a, b) => a.startMinutes - b.startMinutes),
     [blocks, selectedDateKey],
   )
-  const todayDateKey = formatDateKey(new Date())
+  const todayDateKey = formatDateKeyInTimeZone(new Date(), stationTimeZone)
   const todayBlocks = useMemo(
     () => blocks.filter((block) => block.dateKey === todayDateKey).sort((a, b) => a.startMinutes - b.startMinutes),
     [blocks, todayDateKey],
   )
   const currentOnAirBlock = useMemo(() => {
-    const nowMinutes = getNowMinutes()
+    const nowMinutes = getNowMinutes(new Date(), stationTimeZone)
 
     return todayBlocks.find((block) => block.startMinutes <= nowMinutes && block.endMinutes > nowMinutes)
-  }, [todayBlocks, nowTick])
+  }, [stationTimeZone, todayBlocks, nowTick])
   const playerProgramName = programTitleForBlock(currentOnAirBlock, programs)
   const changeView = (nextView: ViewName) => {
     window.history.pushState({}, '', nextView === 'schedule' ? '/schedule' : `/${nextView}`)
@@ -982,6 +1039,8 @@ function App() {
                 selectedBlockId={selectedBlockId}
                 selectedDate={selectedDate}
                 selectedDateKey={selectedDateKey}
+                stationTimeZone={stationTimeZone}
+                todayDateKey={todayDateKey}
                 onAddHost={async (hostName) => {
                   const host = addHostByName(hosts, hostName)[hosts.length]
                   if (!host) return
@@ -1306,6 +1365,8 @@ function DailyCalendar({
   selectedBlockId,
   selectedDate,
   selectedDateKey,
+  stationTimeZone,
+  todayDateKey,
   onAddHost,
   onBeginCreate,
   onChangeCreationKind,
@@ -1338,6 +1399,8 @@ function DailyCalendar({
   selectedBlockId: string | null
   selectedDate: Date
   selectedDateKey: string
+  stationTimeZone: string
+  todayDateKey: string
   onAddHost: (host: string) => void
   onBeginCreate: (hour: number, kind?: ScheduleBlock['kind'] | null) => void
   onChangeCreationKind: (kind: ScheduleBlock['kind']) => void
@@ -1374,7 +1437,7 @@ function DailyCalendar({
         }
       : null)
   const isSlotPanelOpen = activeRequest !== null
-  const isToday = isSameCalendarDay(selectedDate, new Date())
+  const isToday = selectedDateKey === todayDateKey
 
   useLayoutEffect(() => {
     const calendar = calendarRef.current
@@ -1393,7 +1456,7 @@ function DailyCalendar({
       lastFocusNowTokenRef.current = focusNowToken
 
       if (isToday) {
-        const offsetInGrid = getMinutesOffsetInGrid(grid, getNowMinutes())
+        const offsetInGrid = getMinutesOffsetInGrid(grid, getNowMinutes(new Date(), stationTimeZone))
         scrollRoot.scrollTop = Math.max(0, gridTop + offsetInGrid - stickyOffset - 24)
       } else {
         scrollRoot.scrollTop = Math.max(0, gridTop - stickyOffset)
@@ -1403,7 +1466,7 @@ function DailyCalendar({
     }
 
     scrollRoot.scrollTop = Math.max(0, gridTop - stickyOffset)
-  }, [focusNowToken, isToday, selectedDateKey])
+  }, [focusNowToken, isToday, selectedDateKey, stationTimeZone])
 
   useLayoutEffect(() => {
     const grid = gridRef.current
@@ -1416,8 +1479,8 @@ function DailyCalendar({
     const tick = () => {
       const now = new Date()
       setNowIndicator({
-        time: formatNowClock(now),
-        top: getMinutesOffsetInGrid(grid, getNowMinutes(now)),
+        time: formatNowClock(now, stationTimeZone),
+        top: getMinutesOffsetInGrid(grid, getNowMinutes(now, stationTimeZone)),
       })
     }
 
@@ -1429,7 +1492,7 @@ function DailyCalendar({
       window.clearInterval(interval)
       window.removeEventListener('resize', tick)
     }
-  }, [blocks, isToday, selectedDateKey])
+  }, [blocks, isToday, selectedDateKey, stationTimeZone])
 
   return (
     <div
@@ -1795,14 +1858,14 @@ function CreationPanel({
   const linkedProgram = editingBlock?.programId ? programs.find((program) => program.id === editingBlock.programId) : undefined
   const programContext = isEditing ? linkedProgram : selectedProgram
   const showBroadcastProgramDetails = kind === 'broadcast' && (isEditing || Boolean(selectedProgram))
-  const showDescriptionField = !isEditing && !selectedProgram
+  const showDescriptionField = !isEditing
   const mediaSlotMetadata =
     kind === 'recording' && (isEditing || selectedProgram)
       ? {
           programTitle: isEditing ? editingBlock!.title : selectedProgram!.title,
           description: isEditing ? editingBlock!.description : selectedProgram!.description,
           author: isEditing
-            ? editingBlock!.hosts.join(', ') || linkedProgram?.host || '—'
+            ? editingBlock!.hosts.join(', ') || linkedProgram?.host || ''
             : selectedProgram!.host,
         }
       : undefined
@@ -1854,17 +1917,27 @@ function CreationPanel({
             const startMinutes = timeInputToMinutes(startTime)
             const rawEndMinutes = timeInputToMinutes(endTime)
             const endMinutes = rawEndMinutes > startMinutes ? rawEndMinutes : Math.min(1439, startMinutes + 30)
+            const nextHosts = isEditing
+              ? editingBlock!.hosts
+              : selectedHosts.map((host) => host.trim()).filter(Boolean)
+
+            if (nextHosts.length === 0) {
+              setSaveError('Choose at least one host.')
+              toast.error('Choose at least one host.')
+              return
+            }
+
             const mediaSelection = await resolveMediaSelection()
 
             onSave({
               kind,
               title: isEditing
                 ? editingBlock!.title
-                : selectedProgram?.title ?? (title.trim() || (kind === 'broadcast' ? 'Live Broadcast' : 'New Recording')),
-              description: isEditing ? editingBlock!.description : selectedProgram?.description ?? description.trim(),
+                : title.trim() || (kind === 'broadcast' ? 'Live Broadcast' : 'New Recording'),
+              description: isEditing ? editingBlock!.description : description.trim(),
               startMinutes,
               endMinutes,
-              hosts: isEditing ? editingBlock!.hosts : selectedProgram ? [selectedProgram.host] : selectedHosts,
+              hosts: nextHosts,
               programId: isEditing ? editingBlock!.programId : selectedProgram?.id,
               file: mediaSelection.file,
               mediaId: mediaSelection.mediaId,
@@ -1878,30 +1951,24 @@ function CreationPanel({
       <div className="creation-form-body">
         {!isEditing ? (
           <>
-            <label>
-              <span>Program</span>
-              <select value={selectedProgramId} onChange={(event) => setSelectedProgramId(event.target.value)}>
-                <option value="">No program</option>
-                {programs.map((program) => (
-                  <option key={program.id} value={program.id}>
-                    {program.title}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <ProgramSearchSelect
+              options={programs.map((program) => ({ id: program.id, title: program.title }))}
+              selectedId={selectedProgramId}
+              onSelect={setSelectedProgramId}
+            />
             <MultiSelect
               label="Host"
               options={hosts}
               placeholder="Select hosts"
-              value={selectedProgram ? [selectedProgram.host] : selectedHosts}
-              disabled={selectedProgram !== undefined}
+              value={selectedHosts}
+              disabled={false}
               onChange={setSelectedHosts}
-              onCreateOption={selectedProgram ? undefined : onAddHost}
+              onCreateOption={onAddHost}
               createPlaceholder="New host name"
             />
             <label>
               <span>Title</span>
-              <input disabled={selectedProgram !== undefined} value={title} onChange={(event) => setTitle(event.target.value)} />
+              <input value={title} onChange={(event) => setTitle(event.target.value)} />
             </label>
           </>
         ) : null}
@@ -1916,27 +1983,42 @@ function CreationPanel({
           </label>
         </div>
         {showBroadcastProgramDetails ? (
-          <div className="slot-program-details">
-            <div className="media-slot-divider" role="separator" />
-            <div className="media-slot-meta">
-              <div className="media-slot-meta-item">
-                <span>Program</span>
-                <p>{(isEditing ? editingBlock!.title : programContext!.title) || '—'}</p>
+          (() => {
+            const detailsProgramTitle = (isEditing ? editingBlock!.title : programContext!.title).trim()
+            const detailsHost = (isEditing ? editingBlock!.hosts.join(', ') || programContext!.host : programContext!.host).trim()
+            const detailsDescription = (isEditing ? editingBlock!.description : programContext!.description).trim()
+            const hasDetails = Boolean(detailsProgramTitle || detailsHost || detailsDescription)
+
+            if (!hasDetails) {
+              return null
+            }
+
+            return (
+              <div className="slot-program-details">
+                <div className="media-slot-divider" role="separator" />
+                <div className="media-slot-meta">
+                  {detailsProgramTitle ? (
+                    <div className="media-slot-meta-item">
+                      <span>Program</span>
+                      <p>{detailsProgramTitle}</p>
+                    </div>
+                  ) : null}
+                  {detailsHost ? (
+                    <div className="media-slot-meta-item">
+                      <span>Host</span>
+                      <p>{detailsHost}</p>
+                    </div>
+                  ) : null}
+                  {detailsDescription ? (
+                    <div className="media-slot-meta-item">
+                      <span>About</span>
+                      <p>{detailsDescription}</p>
+                    </div>
+                  ) : null}
+                </div>
               </div>
-              <div className="media-slot-meta-item">
-                <span>Host</span>
-                <p>
-                  {isEditing
-                    ? editingBlock!.hosts.join(', ') || programContext!.host || '—'
-                    : programContext!.host || '—'}
-                </p>
-              </div>
-              <div className="media-slot-meta-item">
-                <span>About</span>
-                <p>{(isEditing ? editingBlock!.description : programContext!.description) || '—'}</p>
-              </div>
-            </div>
-          </div>
+            )
+          })()
         ) : null}
         {kind === 'recording' ? (
           <MediaSlotField

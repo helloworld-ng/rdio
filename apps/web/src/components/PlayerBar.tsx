@@ -8,11 +8,35 @@ interface PlayerBarProps {
   streamUrl: string
 }
 
+const playerVisibleStorageKey = 'rdio.player.visible'
+
+function readInitialPlayerVisible() {
+  if (typeof window === 'undefined') {
+    return true
+  }
+
+  try {
+    const savedValue = window.localStorage.getItem(playerVisibleStorageKey)
+
+    if (savedValue === 'true') {
+      return true
+    }
+
+    if (savedValue === 'false') {
+      return false
+    }
+  } catch {
+    // Storage can be unavailable in private contexts; keep the player visible.
+  }
+
+  return true
+}
+
 export function PlayerBar({ channelName, programKind, programName, streamUrl }: PlayerBarProps) {
   const ProgramIcon = programKind === 'broadcast' ? Mic2 : ListMusic
   const dockRef = useRef<HTMLDivElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
-  const [isBarVisible, setIsBarVisible] = useState(true)
+  const [isBarVisible, setIsBarVisible] = useState(readInitialPlayerVisible)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const [playbackError, setPlaybackError] = useState('')
@@ -28,6 +52,14 @@ export function PlayerBar({ channelName, programKind, programName, streamUrl }: 
     const shell = dockRef.current?.closest('.app-shell')
     shell?.classList.toggle('is-player-collapsed', !isBarVisible)
     return () => shell?.classList.remove('is-player-collapsed')
+  }, [isBarVisible])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(playerVisibleStorageKey, String(isBarVisible))
+    } catch {
+      // Ignore unavailable local storage.
+    }
   }, [isBarVisible])
 
   useEffect(() => {
@@ -77,22 +109,20 @@ export function PlayerBar({ channelName, programKind, programName, streamUrl }: 
       ref={dockRef}
       className={isBarVisible ? 'player-dock' : 'player-dock is-collapsed'}
     >
-      {!isBarVisible ? (
-        <button
-          className="player-bar-toggle player-bar-toggle--dock"
-          type="button"
-          aria-controls="player-bar-panel"
-          aria-expanded={isBarVisible}
-          aria-label={isBarVisible ? 'Hide player' : 'Show player'}
-          onClick={() => setIsBarVisible((visible) => !visible)}
-        >
-          {isBarVisible ? (
-            <ChevronDown aria-hidden="true" size={16} strokeWidth={2} />
-          ) : (
-            <ChevronUp aria-hidden="true" size={16} strokeWidth={2} />
-          )}
-        </button>
-      ) : null}
+      <button
+        className="player-bar-toggle player-bar-toggle--inline"
+        type="button"
+        aria-controls="player-bar-panel"
+        aria-expanded={isBarVisible}
+        aria-label={isBarVisible ? 'Hide player' : 'Show player'}
+        onClick={() => setIsBarVisible((visible) => !visible)}
+      >
+        {isBarVisible ? (
+          <ChevronDown aria-hidden="true" size={16} strokeWidth={2} />
+        ) : (
+          <ChevronUp aria-hidden="true" size={16} strokeWidth={2} />
+        )}
+      </button>
       <footer id="player-bar-panel" className="player-bar" aria-label="Player">
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <audio
@@ -129,22 +159,6 @@ export function PlayerBar({ channelName, programKind, programName, streamUrl }: 
             ? <Pause aria-hidden="true" size={22} fill="currentColor" strokeWidth={2} />
             : <Play aria-hidden="true" size={22} fill="currentColor" strokeWidth={2} />
           }
-        </button>
-      </div>
-      <div className="player-bar-actions">
-        <button
-          className="player-bar-toggle player-bar-toggle--inline"
-          type="button"
-          aria-controls="player-bar-panel"
-          aria-expanded={isBarVisible}
-          aria-label={isBarVisible ? 'Hide player' : 'Show player'}
-          onClick={() => setIsBarVisible((visible) => !visible)}
-        >
-          {isBarVisible ? (
-            <ChevronDown aria-hidden="true" size={16} strokeWidth={2} />
-          ) : (
-            <ChevronUp aria-hidden="true" size={16} strokeWidth={2} />
-          )}
         </button>
       </div>
       </footer>

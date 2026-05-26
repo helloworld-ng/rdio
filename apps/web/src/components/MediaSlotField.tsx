@@ -54,6 +54,10 @@ export function MediaSlotField({
     [mediaItems, selectedMediaId],
   )
   const hasSelection = Boolean(selectedItem || uploadFile)
+  const programTitle = slotMetadata?.programTitle.trim() ?? ''
+  const author = slotMetadata?.author.trim() ?? ''
+  const description = slotMetadata?.description.trim() ?? ''
+  const hasMetadata = Boolean(programTitle || author || description)
 
   const clearSelection = () => {
     onSelectMedia(null)
@@ -72,6 +76,28 @@ export function MediaSlotField({
 
   return (
     <section className="media-slot-field">
+      {hasMetadata ? (
+        <div className="media-slot-meta">
+          {programTitle ? (
+            <div className="media-slot-meta-item">
+              <span>Program</span>
+              <p>{programTitle}</p>
+            </div>
+          ) : null}
+          {author ? (
+            <div className="media-slot-meta-item">
+              <span>Host</span>
+              <p>{author}</p>
+            </div>
+          ) : null}
+          {description ? (
+            <div className="media-slot-meta-item">
+              <span>About</span>
+              <p>{description}</p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {hasSelection ? (
         <div className="media-slot-selection">
           <div className="media-slot-selection-card">
@@ -124,25 +150,6 @@ export function MediaSlotField({
           }
         }}
       />
-      {slotMetadata ? (
-        <>
-          <div className="media-slot-divider" role="separator" />
-          <div className="media-slot-meta">
-            <div className="media-slot-meta-item">
-              <span>Program</span>
-              <p>{slotMetadata.programTitle || '—'}</p>
-            </div>
-            <div className="media-slot-meta-item">
-              <span>Host</span>
-              <p>{slotMetadata.author || '—'}</p>
-            </div>
-            <div className="media-slot-meta-item">
-              <span>About</span>
-              <p>{slotMetadata.description || '—'}</p>
-            </div>
-          </div>
-        </>
-      ) : null}
     </section>
   )
 }

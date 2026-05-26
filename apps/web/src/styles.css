@@ -1434,6 +1434,27 @@ button {
   box-shadow: 0 0 0 2px rgba(21, 152, 202, 0.12);
 }
 
+input[type='search'] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+input[type='search']:focus {
+  border: 0;
+  box-shadow: none;
+}
+
+input[type='search']::-webkit-search-decoration,
+input[type='search']::-webkit-search-cancel-button,
+input[type='search']::-webkit-search-results-button,
+input[type='search']::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+}
+
 .file-control {
   position: relative;
 }
@@ -2307,8 +2328,8 @@ button {
   --normal-bg: rgba(255, 255, 255, 0.5);
   --normal-border: rgba(255, 255, 255, 0.62);
   --normal-text: #233036;
-  --success-bg: rgba(255, 255, 255, 0.5);
-  --success-border: rgba(255, 255, 255, 0.62);
+  --success-bg: #ffffff;
+  --success-border: #e8eeee;
   --success-text: #233036;
   --error-bg: rgba(255, 255, 255, 0.5);
   --error-border: rgba(255, 255, 255, 0.62);
@@ -2449,9 +2470,9 @@ button {
 .player-bar-toggle {
   align-items: center;
   aspect-ratio: 1;
-  background: linear-gradient(180deg, #ffffff, #e8eff1);
-  border: 1px solid #cbd7da;
-  border-radius: 50%;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   color: #7e8c91;
   cursor: pointer;
   display: inline-flex;
@@ -2462,18 +2483,10 @@ button {
   z-index: 2;
 }
 
-.player-bar-toggle--dock {
-  left: 50%;
-  position: absolute;
-}
-
-.player-dock:not(.is-collapsed) .player-bar-toggle--dock {
-  top: 0;
-  transform: translate(-50%, -50%);
-}
-
 .player-bar-toggle--inline {
-  position: static;
+  position: absolute;
+  bottom: 13px;
+  right: 16px;
 }
 
 .player-bar-toggle:hover,
@@ -2483,10 +2496,11 @@ button {
   outline: 0;
 }
 
-.player-dock.is-collapsed .player-bar-toggle--dock {
-  bottom: 20px;
-  top: auto;
-  transform: translateX(-50%);
+.player-dock.is-collapsed .player-bar-toggle--inline {
+  background: linear-gradient(180deg, #ffffff, #e8eff1);
+  border: 1px solid #cbd7da;
+  border-radius: 50%;
+  bottom: 13px;
 }
 
 .player-dock.is-collapsed .player-bar {
@@ -2533,11 +2547,6 @@ button {
 .transport-controls .play-toggle {
   height: 36px;
   width: 36px;
-}
-
-.player-bar-actions {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .now-playing {
