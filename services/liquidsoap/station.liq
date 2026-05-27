@@ -9,6 +9,7 @@ icecast_port     = int_of_string(environment.get("ICECAST_PORT",     default="80
 icecast_password = environment.get("ICECAST_SOURCE_PASSWORD", default="sourcepass")
 harbor_port      = int_of_string(environment.get("HARBOR_PORT",      default="8005"))
 live_status_file = "/media/schedule/broadcast-status.txt"
+broadcast_active_file = "/media/schedule/broadcast-active"
 
 def mark_live_connected(_) =
   process.run("sh -lc 'printf connected > #{live_status_file}'")
@@ -47,8 +48,7 @@ def get_scheduled_request() =
 end
 
 def is_broadcast() =
-  lines = process.read.lines("cat /media/schedule/current.txt 2>/dev/null")
-  lines != [] and string.trim(list.hd(lines)) == "broadcast"
+  file.exists(broadcast_active_file)
 end
 
 scheduled = request.dynamic(

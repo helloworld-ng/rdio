@@ -14,6 +14,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 const uploadDirectory = path.join(repoRoot, 'media/uploads')
 const scheduleDirectory = path.join(repoRoot, 'media/schedule')
 const currentPlayoutFile = path.join(scheduleDirectory, 'current.txt')
+const broadcastActiveFile = path.join(scheduleDirectory, 'broadcast-active')
 const broadcastStatusFile = path.join(scheduleDirectory, 'broadcast-status.txt')
 const liquidsoapMediaRoot = '/media/uploads'
 const fallbackPlayoutPath = '/media/fallback/v1-tone.mp3'
@@ -431,9 +432,12 @@ async function refreshCurrentPlayout() {
 
   // Broadcast block takes priority — write sentinel so Liquidsoap switches to live source
   if (currentBroadcastBlock(todayBlocks, station)) {
+    await writeFile(broadcastActiveFile, '1\n')
     await writeFile(currentPlayoutFile, 'broadcast\n')
     return
   }
+
+  await rm(broadcastActiveFile, { force: true })
 
   // Otherwise play the scheduled recording file
   const block = currentMediaBlock(todayBlocks, station)

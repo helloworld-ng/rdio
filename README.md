@@ -209,7 +209,7 @@ export const stationConfig: RadioStationInput = {
 
 ## Liquidsoap playout
 
-Liquidsoap reads `current.txt` via a `request.dynamic` source. The API refreshes this file on every schedule block save, media delete, and on a 15-second polling interval. If no scheduled media is active, the fallback file (`/media/fallback/v1-tone.mp3`) is used. During scheduled live blocks, the API writes the `broadcast` sentinel so Liquidsoap switches to the `/broadcast.mp3` Harbor live input.
+Liquidsoap reads `current.txt` via a `request.dynamic` source. The API refreshes this file on every schedule block save, media delete, and on a 15-second polling interval. If no scheduled media is active, the fallback file (`/media/fallback/v1-tone.mp3`) is used. During scheduled live blocks, the API writes `broadcast` to `current.txt` and creates `broadcast-active` so Liquidsoap can switch to the `/broadcast.mp3` Harbor live input without shelling out on the audio clock.
 
 ## Live broadcast (BUTT)
 
