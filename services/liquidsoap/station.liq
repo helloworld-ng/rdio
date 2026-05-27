@@ -12,6 +12,7 @@ icecast_password = environment.get("ICECAST_SOURCE_PASSWORD", default="sourcepas
 live = input.http(
   max_buffer = 1.0,
   poll_delay = 0.5,
+  self_sync = false,
   timeout = 3.0,
   "http://localhost:#{icecast_port}/broadcast.mp3"
 )
@@ -44,10 +45,10 @@ scheduled = request.dynamic(
 )
 
 recorded = fallback(track_sensitive = false, [scheduled, default])
-live_or_recorded = fallback(track_sensitive = false, [live, recorded])
+live_or_silence = fallback(track_sensitive = false, [live, blank()])
 
 rdio = switch(track_sensitive = false, [
-  ({is_broadcast()}, live_or_recorded),
+  ({is_broadcast()}, live_or_silence),
   ({true}, recorded)
 ])
 rdio = mksafe(rdio)
