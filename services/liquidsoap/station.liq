@@ -8,8 +8,13 @@ icecast_host     = environment.get("ICECAST_HOST",            default="localhost
 icecast_port     = int_of_string(environment.get("ICECAST_PORT",     default="8001"))
 icecast_password = environment.get("ICECAST_SOURCE_PASSWORD", default="sourcepass")
 
-# Live broadcast source — BUTT connects to /broadcast.mp3
-live = input.http("http://localhost:#{icecast_port}/broadcast.mp3")
+# Live broadcast source — BUTT connects to /broadcast.mp3.
+live = input.http(
+  max_buffer = 1.0,
+  poll_delay = 0.5,
+  timeout = 3.0,
+  "http://localhost:#{icecast_port}/broadcast.mp3"
+)
 
 def get_scheduled_request() =
   lines = process.read.lines("cat /media/schedule/current.txt 2>/dev/null")

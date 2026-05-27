@@ -3,6 +3,8 @@ set -e
 
 ICECAST_SOURCE_PASSWORD="${ICECAST_SOURCE_PASSWORD:-sourcepass}"
 ICECAST_PORT="${ICECAST_PORT:-8001}"
+ICECAST_QUEUE_SIZE="${ICECAST_QUEUE_SIZE:-131072}"
+ICECAST_BURST_SIZE="${ICECAST_BURST_SIZE:-16384}"
 
 # Write icecast config
 cat > /etc/icecast2/icecast.xml <<EOF
@@ -12,6 +14,8 @@ cat > /etc/icecast2/icecast.xml <<EOF
   <limits>
     <clients>100</clients>
     <sources>10</sources>
+    <queue-size>${ICECAST_QUEUE_SIZE}</queue-size>
+    <burst-size>${ICECAST_BURST_SIZE}</burst-size>
   </limits>
   <authentication>
     <source-password>${ICECAST_SOURCE_PASSWORD}</source-password>

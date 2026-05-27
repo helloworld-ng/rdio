@@ -32,6 +32,11 @@ function readInitialPlayerVisible() {
   return true
 }
 
+function freshStreamUrl(streamUrl: string) {
+  const separator = streamUrl.includes('?') ? '&' : '?'
+  return `${streamUrl}${separator}_=${Date.now()}`
+}
+
 export function PlayerBar({ channelName, programKind, programName, streamUrl }: PlayerBarProps) {
   const ProgramIcon = programKind === 'broadcast' ? Mic2 : ListMusic
   const dockRef = useRef<HTMLDivElement>(null)
@@ -72,7 +77,7 @@ export function PlayerBar({ channelName, programKind, programName, streamUrl }: 
     }
 
     audio.pause()
-    audio.src = streamUrl
+    audio.removeAttribute('src')
     audio.load()
     setIsPlaying(false)
     setIsConnecting(false)
@@ -133,7 +138,8 @@ export function PlayerBar({ channelName, programKind, programName, streamUrl }: 
       setPlaybackError('')
       setIsConnecting(true)
       audio.loop = false
-      audio.src = streamUrl
+      audio.preload = 'none'
+      audio.src = freshStreamUrl(streamUrl)
       audio.load()
       audio.play().catch(() => {
         setIsConnecting(false)
@@ -188,6 +194,7 @@ export function PlayerBar({ channelName, programKind, programName, streamUrl }: 
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <audio
         ref={audioRef}
+        preload="none"
         onError={() => {
           setIsConnecting(false)
           setIsPlaying(false)

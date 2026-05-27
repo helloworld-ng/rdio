@@ -628,18 +628,24 @@ server.get('/broadcast/settings', async (request, reply) => {
 
 server.get('/rdio.mp3', (request, reply) => {
   reply.hijack()
+  reply.raw.setTimeout(0)
+  reply.raw.socket?.setNoDelay(true)
   const icecastPort = Number(process.env.ICECAST_PORT ?? 8001)
   const proxyReq = httpRequest({ hostname: 'localhost', port: icecastPort, path: '/rdio.mp3' }, (proxyRes) => {
     const headers: Record<string, string> = {
       'Content-Type': proxyRes.headers['content-type'] ?? 'audio/mpeg',
       'Cache-Control': 'no-cache',
       'Access-Control-Allow-Origin': '*',
+      'X-Accel-Buffering': 'no',
     }
     for (const [k, v] of Object.entries(proxyRes.headers)) {
       if (k.startsWith('icy-') && typeof v === 'string') headers[k] = v
     }
     reply.raw.writeHead(proxyRes.statusCode ?? 503, headers)
     proxyRes.pipe(reply.raw)
+  })
+  proxyReq.on('socket', (socket) => {
+    socket.setNoDelay(true)
   })
   proxyReq.on('error', () => { if (!reply.raw.headersSent) reply.raw.writeHead(503); reply.raw.end() })
   proxyReq.end()
