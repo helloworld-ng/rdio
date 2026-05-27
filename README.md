@@ -70,7 +70,7 @@ Default local endpoints:
 | Web admin | http://localhost:5173 |
 | API | http://localhost:3001 |
 | Icecast admin | http://localhost:8000/admin |
-| Stream | http://localhost:8000/rdio.mp3 |
+| Stream | http://localhost:3001/rdio.mp3 |
 
 ## Environment variables
 
@@ -81,12 +81,12 @@ Default local endpoints:
 | `WEB_ORIGIN` | `http://localhost:5173` | Allowed CORS origin |
 | `VITE_API_BASE_URL` | `http://localhost:3001` | API base URL baked into the web build at build time |
 | `VITE_API_KEY` | _(blank)_ | Must match `API_KEY`. Baked into the web build at build time |
-| `PUBLIC_STREAM_BASE_URL` | `http://localhost:8000` | Public stream origin used to build `streamUrl` in API responses |
+| `PUBLIC_STREAM_BASE_URL` | _(request origin)_ | Optional public stream origin used to build `streamUrl` in API responses. Leave blank to use the API's `/rdio.mp3` proxy |
 | `ICECAST_HOST` | `localhost` | Icecast host (Liquidsoap connects here) |
-| `ICECAST_PORT` | `8000` | Icecast port |
+| `ICECAST_PORT` | `8001` in the bundled API container, `8000` for local Docker Compose Icecast | Icecast port |
 | `ICECAST_SOURCE_PASSWORD` | `sourcepass` | Icecast source password |
 
-In production (Fly.io), `ICECAST_HOST=localhost` and `ICECAST_PORT=8001` since Icecast runs inside the same container. `API_KEY` and `VITE_API_KEY` should be set to the same strong secret.
+In production (Fly.io), `ICECAST_HOST=localhost` and `ICECAST_PORT=8001` since Icecast runs inside the same container. `API_KEY` and `VITE_API_KEY` should be set to the same strong secret. Set `PUBLIC_STREAM_BASE_URL` only when browsers should play from a separate public Icecast origin instead of the API proxy.
 
 ## Deploying to Fly.io
 

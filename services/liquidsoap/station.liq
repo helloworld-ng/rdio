@@ -38,9 +38,12 @@ scheduled = request.dynamic(
   get_scheduled_request
 )
 
+recorded = fallback(track_sensitive = false, [scheduled, default])
+live_or_recorded = fallback(track_sensitive = false, [live, recorded])
+
 rdio = switch(track_sensitive = false, [
-  ({is_broadcast()}, live),
-  ({true}, fallback(track_sensitive = false, [scheduled, default]))
+  ({is_broadcast()}, live_or_recorded),
+  ({true}, recorded)
 ])
 rdio = mksafe(rdio)
 

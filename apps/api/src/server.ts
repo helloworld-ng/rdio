@@ -1,4 +1,5 @@
 import Fastify from 'fastify'
+import type { FastifyRequest } from 'fastify'
 import { createReadStream } from 'node:fs'
 import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { request as httpRequest } from 'node:http'
@@ -511,14 +512,38 @@ function broadcastIcecastCredentials() {
   }
 }
 
-function stationSummary(station: RadioStation) {
+function firstHeaderValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value
+}
+
+function requestBaseUrl(request: FastifyRequest) {
+  const forwardedProto = firstHeaderValue(request.headers['x-forwarded-proto'])?.split(',')[0]?.trim()
+  const forwardedHost = firstHeaderValue(request.headers['x-forwarded-host'])?.split(',')[0]?.trim()
+  const host = forwardedHost || request.headers.host
+
+  if (!host) {
+    return undefined
+  }
+
+  return `${forwardedProto || request.protocol}://${host}`
+}
+
+function publicUrl(url: string, baseUrl?: string) {
+  if (/^https?:\/\//i.test(url) || !baseUrl) {
+    return url
+  }
+
+  return new URL(url, baseUrl).toString()
+}
+
+function stationSummary(station: RadioStation, baseUrl?: string) {
   return {
     id: station.id,
     name: station.name,
     slug: station.slug,
     timezone: station.timezone,
     mount: station.mount,
-    streamUrl: station.streamUrl,
+    streamUrl: publicUrl(station.streamUrl, baseUrl),
     fallbackSource: station.fallbackSource,
     icecast: icecastSettings(station.mount),
     broadcastIcecast: broadcastIcecastSettings(),
@@ -539,12 +564,12 @@ function defaultStation() {
   return requireStation(defaultStationId)
 }
 
-async function scheduleResponse(station: RadioStation) {
+async function scheduleResponse(station: RadioStation, baseUrl?: string) {
   const blocks = await readAllScheduleBlocks()
   const at = new Date()
 
   return {
-    station: stationSummary(station),
+    station: stationSummary(station, baseUrl),
     generatedAt: at.toISOString(),
     blocks,
     currentProgram: currentScheduleBlock(blocks, station, at),
@@ -553,15 +578,16 @@ async function scheduleResponse(station: RadioStation) {
   }
 }
 
-async function nowPlayingResponse(station: RadioStation) {
+async function nowPlayingResponse(station: RadioStation, baseUrl?: string) {
   const blocks = await readAllScheduleBlocks()
   const at = new Date()
   const currentProgram = currentScheduleBlock(blocks, station, at)
+  const streamUrl = publicUrl(station.streamUrl, baseUrl)
 
   return {
-    station: stationSummary(station),
+    station: stationSummary(station, baseUrl),
     mount: station.mount,
-    streamUrl: station.streamUrl,
+    streamUrl,
     currentProgram,
     upcomingPrograms: upcomingScheduleBlocks(blocks, station, at, 3),
     source: currentProgram
@@ -602,7 +628,8 @@ server.get('/broadcast/settings', async (request, reply) => {
 
 server.get('/rdio.mp3', (request, reply) => {
   reply.hijack()
-  const proxyReq = httpRequest({ hostname: 'localhost', port: 8001, path: '/rdio.mp3' }, (proxyRes) => {
+  const icecastPort = Number(process.env.ICECAST_PORT ?? 8001)
+  const proxyReq = httpRequest({ hostname: 'localhost', port: icecastPort, path: '/rdio.mp3' }, (proxyRes) => {
     const headers: Record<string, string> = {
       'Content-Type': proxyRes.headers['content-type'] ?? 'audio/mpeg',
       'Cache-Control': 'no-cache',
@@ -618,11 +645,11 @@ server.get('/rdio.mp3', (request, reply) => {
   proxyReq.end()
 })
 
-server.get('/station', async () => ({
-  station: stationSummary(defaultStation()),
+server.get('/station', async (request) => ({
+  station: stationSummary(defaultStation(), requestBaseUrl(request)),
 }))
 
-server.get('/schedule', async () => scheduleResponse(defaultStation()))
+server.get('/schedule', async (request) => scheduleResponse(defaultStation(), requestBaseUrl(request)))
 
 server.get('/schedule-blocks', async () => ({
   blocks: await readAllScheduleBlocks(),
@@ -769,7 +796,7 @@ server.get('/playout/current', async () => {
   }
 })
 
-server.get('/now-playing', async () => nowPlayingResponse(defaultStation()))
+server.get('/now-playing', async (request) => nowPlayingResponse(defaultStation(), requestBaseUrl(request)))
 
 server.get('/media', async () => ({
   media: await listMediaFiles(),

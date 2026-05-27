@@ -1,10 +1,10 @@
 import { defaultStationId, stationConfig } from '@rdio/config'
 import { defineStation, type RadioStation } from '@rdio/rdio-core'
 
-const publicStreamBaseUrl = process.env.PUBLIC_STREAM_BASE_URL ?? 'http://localhost:8000'
+const publicStreamBaseUrl = process.env.PUBLIC_STREAM_BASE_URL
 
 function streamUrlForMount(mount: string) {
-  return new URL(mount, publicStreamBaseUrl).toString()
+  return publicStreamBaseUrl ? new URL(mount, publicStreamBaseUrl).toString() : mount
 }
 
 export const stations: RadioStation[] = [

@@ -2,6 +2,7 @@
 set -e
 
 ICECAST_SOURCE_PASSWORD="${ICECAST_SOURCE_PASSWORD:-sourcepass}"
+ICECAST_PORT="${ICECAST_PORT:-8001}"
 
 # Write icecast config
 cat > /etc/icecast2/icecast.xml <<EOF
@@ -20,7 +21,7 @@ cat > /etc/icecast2/icecast.xml <<EOF
   </authentication>
   <hostname>localhost</hostname>
   <listen-socket>
-    <port>8001</port>
+    <port>${ICECAST_PORT}</port>
     <bind-address>0.0.0.0</bind-address>
   </listen-socket>
   <paths>
