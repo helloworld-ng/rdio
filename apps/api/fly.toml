@@ -11,6 +11,7 @@ primary_region = "lhr"
 [env]
   NODE_ENV = "production"
   API_PORT  = "3001"
+  HARBOR_PORT = "8005"
 
 [http_service]
   internal_port        = 3001
@@ -25,6 +26,13 @@ primary_region = "lhr"
 
   [[services.ports]]
     port = 8001
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8005
+
+  [[services.ports]]
+    port = 8005
 
 [[vm]]
   memory   = "1gb"

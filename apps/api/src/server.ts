@@ -14,6 +14,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 const uploadDirectory = path.join(repoRoot, 'media/uploads')
 const scheduleDirectory = path.join(repoRoot, 'media/schedule')
 const currentPlayoutFile = path.join(scheduleDirectory, 'current.txt')
+const broadcastStatusFile = path.join(scheduleDirectory, 'broadcast-status.txt')
 const liquidsoapMediaRoot = '/media/uploads'
 const fallbackPlayoutPath = '/media/fallback/v1-tone.mp3'
 const programsFile = path.join(repoRoot, 'media/programs.json')
@@ -41,7 +42,7 @@ function isPublicRequest(method: string, url: string) {
     pathname === '/station' ||
     pathname === '/schedule' ||
     pathname === '/now-playing' ||
-    pathname === '/rdio.mp3' ||
+    pathname === '/live.mp3' ||
     pathname === '/broadcast/status' ||
     /^\/schedule-blocks\/\d{4}-\d{2}-\d{2}$/.test(pathname) ||
     /^\/media\/[^/]+$/.test(pathname)
@@ -500,7 +501,7 @@ function broadcastIcecastSettings() {
 
   return {
     host,
-    port: Number(process.env.ICECAST_PORT ?? 8000),
+    port: Number(process.env.HARBOR_PORT ?? 8005),
     mount: '/broadcast.mp3',
   }
 }
@@ -604,16 +605,9 @@ async function nowPlayingResponse(station: RadioStation, baseUrl?: string) {
 server.get('/health', async () => ({ ok: true, service: 'rdio-api' }))
 
 server.get('/broadcast/status', async () => {
-  const icecastPort = Number(process.env.ICECAST_PORT ?? 8001)
-  const active = await new Promise<boolean>((resolve) => {
-    const req = httpRequest(
-      { hostname: 'localhost', port: icecastPort, path: '/broadcast.mp3', method: 'HEAD' },
-      (res) => { resolve(res.statusCode === 200) },
-    )
-    req.on('error', () => resolve(false))
-    req.setTimeout(2000, () => { req.destroy(); resolve(false) })
-    req.end()
-  })
+  const active = await readFile(broadcastStatusFile, 'utf8')
+    .then((status) => status.trim() === 'connected')
+    .catch(() => false)
   return { active }
 })
 
@@ -626,12 +620,12 @@ server.get('/broadcast/settings', async (request, reply) => {
   }
 })
 
-server.get('/rdio.mp3', (request, reply) => {
+server.get('/live.mp3', (request, reply) => {
   reply.hijack()
   reply.raw.setTimeout(0)
   reply.raw.socket?.setNoDelay(true)
   const icecastPort = Number(process.env.ICECAST_PORT ?? 8001)
-  const proxyReq = httpRequest({ hostname: 'localhost', port: icecastPort, path: '/rdio.mp3' }, (proxyRes) => {
+  const proxyReq = httpRequest({ hostname: 'localhost', port: icecastPort, path: '/live.mp3' }, (proxyRes) => {
     const headers: Record<string, string> = {
       'Content-Type': proxyRes.headers['content-type'] ?? 'audio/mpeg',
       'Cache-Control': 'no-cache',

@@ -7,14 +7,27 @@ default = if file.exists(fallback_file) then single(fallback_file) else blank() 
 icecast_host     = environment.get("ICECAST_HOST",            default="localhost")
 icecast_port     = int_of_string(environment.get("ICECAST_PORT",     default="8001"))
 icecast_password = environment.get("ICECAST_SOURCE_PASSWORD", default="sourcepass")
+harbor_port      = int_of_string(environment.get("HARBOR_PORT",      default="8005"))
+live_status_file = "/media/schedule/broadcast-status.txt"
 
-# Live broadcast source — BUTT connects to /broadcast.mp3.
-live = input.http(
-  max_buffer = 1.0,
-  poll_delay = 0.5,
-  self_sync = false,
-  timeout = 3.0,
-  "http://localhost:#{icecast_port}/broadcast.mp3"
+def mark_live_connected(_) =
+  process.run("sh -lc 'printf connected > #{live_status_file}'")
+end
+
+def mark_live_disconnected() =
+  process.run("sh -lc 'printf disconnected > #{live_status_file}'")
+end
+
+# Live broadcast source — BUTT connects directly to Liquidsoap.
+live = input.harbor(
+  buffer = 1.0,
+  max = 3.0,
+  on_connect = mark_live_connected,
+  on_disconnect = mark_live_disconnected,
+  password = icecast_password,
+  port = harbor_port,
+  user = "source",
+  "/broadcast.mp3"
 )
 
 def get_scheduled_request() =
@@ -58,7 +71,7 @@ output.icecast(
   host = icecast_host,
   port = icecast_port,
   password = icecast_password,
-  mount = "/rdio.mp3",
+  mount = "/live.mp3",
   name = "rdio",
   description = "Open-source rdio automation",
   rdio

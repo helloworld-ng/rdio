@@ -16,9 +16,9 @@ The project keeps the product layer in TypeScript and delegates audio delivery t
 |---------|-----|
 | Web admin | https://rdio-web.fly.dev |
 | API | https://rdio-api.fly.dev |
-| Stream | https://rdio-api.fly.dev/rdio.mp3 |
+| Stream | https://rdio-api.fly.dev/live.mp3 |
 
-Both apps run on Fly.io (London region). The API container bundles Node.js, Icecast2, and Liquidsoap in a single machine — they communicate over `localhost`. The Node.js API proxies the audio stream from `localhost:8001` at `GET /rdio.mp3`.
+Both apps run on Fly.io (London region). The API container bundles Node.js, Icecast2, and Liquidsoap in a single machine — they communicate over `localhost`. The Node.js API proxies the audio stream from `localhost:8001` at `GET /live.mp3`.
 
 ## Repository layout
 
@@ -70,7 +70,7 @@ Default local endpoints:
 | Web admin | http://localhost:5173 |
 | API | http://localhost:3001 |
 | Icecast admin | http://localhost:8000/admin |
-| Stream | http://localhost:3001/rdio.mp3 |
+| Stream | http://localhost:3001/live.mp3 |
 
 ## Environment variables
 
@@ -81,9 +81,10 @@ Default local endpoints:
 | `WEB_ORIGIN` | `http://localhost:5173` | Allowed CORS origin |
 | `VITE_API_BASE_URL` | `http://localhost:3001` | API base URL baked into the web build at build time |
 | `VITE_API_KEY` | _(blank)_ | Must match `API_KEY`. Baked into the web build at build time |
-| `PUBLIC_STREAM_BASE_URL` | _(request origin)_ | Optional public stream origin used to build `streamUrl` in API responses. Leave blank to use the API's `/rdio.mp3` proxy |
+| `PUBLIC_STREAM_BASE_URL` | _(request origin)_ | Optional public stream origin used to build `streamUrl` in API responses. Leave blank to use the API's `/live.mp3` proxy |
 | `ICECAST_HOST` | `localhost` | Icecast host (Liquidsoap connects here) |
 | `ICECAST_PORT` | `8001` in the bundled API container, `8000` for local Docker Compose Icecast | Icecast port |
+| `HARBOR_PORT` | `8005` | Liquidsoap Harbor port for BUTT live broadcast source connections |
 | `ICECAST_SOURCE_PASSWORD` | `sourcepass` | Icecast source password |
 
 In production (Fly.io), `ICECAST_HOST=localhost` and `ICECAST_PORT=8001` since Icecast runs inside the same container. `API_KEY` and `VITE_API_KEY` should be set to the same strong secret. Set `PUBLIC_STREAM_BASE_URL` only when browsers should play from a separate public Icecast origin instead of the API proxy.
@@ -167,7 +168,7 @@ GET  /schedule                  Station schedule snapshot
 GET  /now-playing               Current stream source and upcoming programs
 GET  /schedule-blocks/:day      Schedule blocks for a given day (YYYY-MM-DD)
 GET  /broadcast/status          Live broadcast source connection status
-GET  /rdio.mp3                  Live audio stream (proxied from internal Icecast2)
+GET  /live.mp3                  Live audio stream (proxied from internal Icecast2)
 GET  /media/:id                 Serve a media file
 ```
 
@@ -200,7 +201,7 @@ export const stationConfig: RadioStationInput = {
   id: '16rdio',
   name: '16 Radio',
   timezone: 'Africa/Lagos',
-  mount: '/rdio.mp3',
+  mount: '/live.mp3',
   fallbackSource: { kind: 'playlist', playlistId: 'fallback' },
   schedule: [],
 }
@@ -208,8 +209,8 @@ export const stationConfig: RadioStationInput = {
 
 ## Liquidsoap playout
 
-Liquidsoap reads `current.txt` via a `request.dynamic` source. The API refreshes this file on every schedule block save, media delete, and on a 15-second polling interval. If no scheduled media is active, the fallback file (`/media/fallback/v1-tone.mp3`) is used. During scheduled live blocks, the API writes the `broadcast` sentinel so Liquidsoap switches to the `/broadcast.mp3` live input.
+Liquidsoap reads `current.txt` via a `request.dynamic` source. The API refreshes this file on every schedule block save, media delete, and on a 15-second polling interval. If no scheduled media is active, the fallback file (`/media/fallback/v1-tone.mp3`) is used. During scheduled live blocks, the API writes the `broadcast` sentinel so Liquidsoap switches to the `/broadcast.mp3` Harbor live input.
 
 ## Live broadcast (BUTT)
 
-The Broadcast view in the admin shows connection settings for BUTT (Broadcast Using This Tool). Connect BUTT to Icecast using the source password from your env (`ICECAST_SOURCE_PASSWORD`). The password is only returned from the authenticated `GET /broadcast/settings` endpoint. Locally, Icecast listens on port `8000`. In production, Icecast is internal — live broadcast from outside the container is not yet supported.
+The Broadcast view in the admin shows connection settings for BUTT (Broadcast Using This Tool). Connect BUTT to the Liquidsoap Harbor input using the source password from your env (`ICECAST_SOURCE_PASSWORD`). The password is only returned from the authenticated `GET /broadcast/settings` endpoint. Locally and in production, BUTT connects to the Harbor port (`HARBOR_PORT`, default `8005`) at mount `/broadcast.mp3`. Liquidsoap remains the only source publishing the public listener mount `/live.mp3`.

@@ -4,7 +4,7 @@ export const stationConfig: RadioStationInput = {
   id: '16rdio',
   name: '16 Radio',
   timezone: 'Africa/Lagos',
-  mount: '/rdio.mp3',
+  mount: '/live.mp3',
   fallbackSource: { kind: 'playlist', playlistId: 'fallback' },
   schedule: [
     {

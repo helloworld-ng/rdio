@@ -16,10 +16,13 @@ services:
     environment:
       ICECAST_HOST: icecast
       ICECAST_PORT: "8000"
+      HARBOR_PORT: "8005"
       ICECAST_SOURCE_PASSWORD: ${ICECAST_SOURCE_PASSWORD:-sourcepass}
     volumes:
       - ./services/liquidsoap:/rdio:ro
-      - ./media:/media:ro
+      - ./media:/media
+    ports:
+      - "8005:8005"
     command: liquidsoap /rdio/station.liq
 
 # Postgres is defined for when packages/db is implemented.

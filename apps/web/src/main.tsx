@@ -2551,7 +2551,7 @@ function BroadcastPage({ station }: { station: StationSummary }) {
           {settingsError ? <p className="form-error">{settingsError}</p> : null}
           <div className="settings-list">
             <SettingsRow label="Application" value="BUTT" />
-            <SettingsRow label="Server type" value="Icecast" />
+            <SettingsRow label="Server type" value="Icecast / Liquidsoap Harbor" />
             <SettingsRow label="Address" value={icecast.host} />
             <SettingsRow label="Port" value={String(icecast.port)} />
             <SettingsRow label="User" value="source" />
