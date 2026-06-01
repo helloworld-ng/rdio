@@ -10,15 +10,9 @@ The project keeps the product layer in TypeScript and delegates audio delivery t
 - Liquidsoap for playout automation
 - Icecast2 for listener streaming
 
-## Live deployment
+## Deployment model
 
-| Service | URL |
-|---------|-----|
-| Web admin | https://rdio-web.fly.dev |
-| API | https://rdio-api.fly.dev |
-| Stream | https://rdio-api.fly.dev/live.mp3 |
-
-Both apps run on Fly.io (London region). The API container bundles Node.js, Icecast2, and Liquidsoap in a single machine — they communicate over `localhost`. The Node.js API proxies the audio stream from `localhost:8001` at `GET /live.mp3`.
+The API container can bundle Node.js, Icecast2, and Liquidsoap in a single machine. In that setup, the services communicate over `localhost`, and the Node.js API proxies the audio stream from the internal Icecast port at `GET /live.mp3`.
 
 ## Repository layout
 
@@ -87,63 +81,50 @@ Default local endpoints:
 | `HARBOR_PORT` | `8005` | Liquidsoap Harbor port for BUTT live broadcast source connections |
 | `ICECAST_SOURCE_PASSWORD` | `sourcepass` | Icecast source password |
 
-In production (Fly.io), `ICECAST_HOST=localhost` and `ICECAST_PORT=8001` since Icecast runs inside the same container. `API_KEY` and `VITE_API_KEY` should be set to the same strong secret. Set `PUBLIC_STREAM_BASE_URL` only when browsers should play from a separate public Icecast origin instead of the API proxy.
+In a bundled production container, `ICECAST_HOST=localhost` and `ICECAST_PORT=8001` since Icecast runs inside the same container. `API_KEY` and `VITE_API_KEY` should be set to the same strong secret. Set `PUBLIC_STREAM_BASE_URL` only when browsers should play from a separate public Icecast origin instead of the API proxy.
 
-## Deploying to Fly.io
+## Deployment
 
 ### API (with Icecast2 + Liquidsoap bundled)
 
-Deploy from the repo root (the Dockerfile context must be the root):
+Deploy from the repo root so the Dockerfile context includes the whole workspace:
 
 ```bash
-fly deploy -c apps/api/fly.toml
+docker build -f apps/api/Dockerfile -t <api-image-name> .
 ```
 
 Set required secrets:
 
-```bash
-fly secrets set \
-  API_KEY=<your-secret> \
-  ICECAST_SOURCE_PASSWORD=<your-password> \
-  --app rdio-api
-```
+| Secret | Description |
+|--------|-------------|
+| `API_KEY` | Shared secret for authenticated API endpoints |
+| `ICECAST_SOURCE_PASSWORD` | Password Liquidsoap uses to publish to Icecast |
 
-The app uses a persistent Fly volume (`rdio_media`) mounted at `/media`. Create it once:
+Mount persistent storage at `/media`, then add a fallback audio file so Liquidsoap has something to play when nothing is scheduled:
 
 ```bash
-fly volumes create rdio_media --region lhr --size 10 --app rdio-api
-```
-
-After first deploy, upload a fallback audio file so Liquidsoap has something to play when nothing is scheduled:
-
-```bash
-fly ssh console --app rdio-api -C "mkdir -p /media/fallback"
-fly sftp shell --app rdio-api
-# inside the shell:
-# put /path/to/fallback.mp3 /media/fallback/v1-tone.mp3
+mkdir -p /media/fallback
+cp /path/to/fallback.mp3 /media/fallback/v1-tone.mp3
 ```
 
 ### Web
 
-The web app is deployed via GitHub Actions (see `.github/workflows/deploy-web.yml`). Push to `main` triggers a deploy. Set these GitHub secrets:
+The web app can be deployed by building `apps/web` with the API URL and shared API key available at build time. If using GitHub Actions, set these repository secrets:
 
 | Secret | Value |
 |--------|-------|
-| `FLY_API_TOKEN` | Fly deploy token |
-| `VITE_API_BASE_URL` | `https://rdio-api.fly.dev` |
+| `VITE_API_BASE_URL` | Public API origin |
 | `VITE_API_KEY` | Same value as the API's `API_KEY` secret |
 
-To deploy manually:
+Build manually from the repo root:
 
 ```bash
-fly deploy -c apps/web/fly.toml \
-  --build-arg VITE_API_BASE_URL=https://rdio-api.fly.dev \
-  --build-arg VITE_API_KEY=<your-secret>
+pnpm --filter @rdio/web build
 ```
 
 ## Media and data storage
 
-All persistent data lives on the Fly volume at `/media` (or `media/` relative to the repo root locally).
+All persistent data lives at `/media` in production (or `media/` relative to the repo root locally).
 
 | Data | Storage |
 |------|---------|
