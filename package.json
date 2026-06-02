@@ -6,6 +6,9 @@
   "packageManager": "pnpm@10.34.1",
   "scripts": {
     "dev": "turbo dev",
+    "api:dev": "turbo dev --filter=@rdio/api",
+    "web:dev": "turbo dev --filter=@rdio/web",
+    "worker:dev": "turbo dev --filter=@rdio/worker",
     "build": "turbo build",
     "test": "turbo test",
     "typecheck": "turbo typecheck",
