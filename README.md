@@ -33,10 +33,11 @@ services/icecast      Icecast config templates (used for local Docker dev)
 
 ## Local development
 
-Copy the example env file and adjust as needed:
+Copy the app env files and adjust as needed:
 
 ```bash
-cp .env.example .env
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
 ```
 
 Install dependencies:
@@ -54,6 +55,7 @@ pnpm dev
 Start the radio infrastructure (Icecast + Liquidsoap):
 
 ```bash
+cp .env.example .env
 docker compose up
 ```
 
