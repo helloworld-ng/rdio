@@ -19,6 +19,7 @@
     "vite": "^6.0.0"
   },
   "devDependencies": {
+    "@rdio/tsconfig": "workspace:*",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "typescript": "^5.7.2"

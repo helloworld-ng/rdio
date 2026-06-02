@@ -1,11 +1,10 @@
 {
+  "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     "target": "ES2022",
     "useDefineForClassFields": true,
     "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable"
+      "ES2022"
     ],
     "allowJs": false,
     "skipLibCheck": true,

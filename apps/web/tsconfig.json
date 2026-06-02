@@ -1,7 +1,6 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "@rdio/tsconfig/react-app.json",
   "compilerOptions": {
-    "jsx": "react-jsx",
     "noEmit": true
   },
   "include": [

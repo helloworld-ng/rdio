@@ -1,12 +1,9 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "@rdio/tsconfig/library.json",
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "noEmit": false,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true
+    "noEmit": false
   },
   "include": [
     "src"

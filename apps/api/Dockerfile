@@ -4,13 +4,14 @@ RUN corepack enable pnpm
 WORKDIR /app
 
 # Workspace manifests first for layer caching
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/api/package.json      apps/api/
 COPY apps/web/package.json      apps/web/
 COPY apps/worker/package.json   apps/worker/
 COPY packages/rdio-core/package.json packages/rdio-core/
 COPY packages/config/package.json    packages/config/
 COPY packages/db/package.json        packages/db/
+COPY packages/tsconfig/package.json packages/tsconfig/
 
 RUN pnpm install --frozen-lockfile
 

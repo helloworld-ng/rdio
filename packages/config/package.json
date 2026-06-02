@@ -17,6 +17,7 @@
     "@rdio/rdio-core": "workspace:*"
   },
   "devDependencies": {
+    "@rdio/tsconfig": "workspace:*",
     "typescript": "^5.7.2"
   }
 }
