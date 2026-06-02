@@ -52,12 +52,22 @@ Start the TypeScript apps (web + API in watch mode):
 pnpm dev
 ```
 
+To run an app independently:
+
+```bash
+pnpm api:dev
+pnpm web:dev
+pnpm worker:dev
+```
+
 Start the radio infrastructure (Icecast + Liquidsoap):
 
 ```bash
 cp .env.example .env
 docker compose up
 ```
+
+The first run downloads the Icecast and Liquidsoap container images. To confirm that the local stream is available, open http://localhost:8000/live.mp3.
 
 Default local endpoints:
 
