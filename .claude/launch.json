@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "web",
-      "runtimeExecutable": "/opt/homebrew/bin/node",
-      "runtimeArgs": ["/Users/opemipo/_sites/rdio/apps/web/node_modules/vite/bin/vite.js", "--host", "0.0.0.0"],
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@rdio/web", "dev"],
       "port": 5173
     }
   ]

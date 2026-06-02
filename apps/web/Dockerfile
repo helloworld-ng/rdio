@@ -7,9 +7,11 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/web/package.json      apps/web/
 COPY apps/api/package.json      apps/api/
 COPY apps/worker/package.json   apps/worker/
+COPY packages/auth/package.json      packages/auth/
 COPY packages/rdio-core/package.json packages/rdio-core/
 COPY packages/config/package.json    packages/config/
 COPY packages/db/package.json        packages/db/
+COPY packages/env/package.json       packages/env/
 COPY packages/tsconfig/package.json packages/tsconfig/
 
 RUN pnpm install --frozen-lockfile
@@ -17,14 +19,12 @@ RUN pnpm install --frozen-lockfile
 COPY packages/ packages/
 COPY apps/web/ apps/web/
 
-# VITE_API_BASE_URL and VITE_API_KEY are baked into the bundle at build time.
-# Pass them as --build-arg when running fly deploy (see fly.toml comment).
+# VITE_API_BASE_URL is baked into the bundle at build time.
+# Pass it as --build-arg when running fly deploy (see fly.toml comment).
 ARG VITE_API_BASE_URL=http://localhost:3001
-ARG VITE_API_KEY=
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
-ENV VITE_API_KEY=$VITE_API_KEY
 
-RUN pnpm --filter=@rdio/web run build
+RUN pnpm --filter=@rdio/web... run build
 
 # ── runtime stage ─────────────────────────────────────────────────────────────
 FROM nginx:alpine

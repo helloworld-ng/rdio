@@ -1,3 +1,4 @@
+/** Formats a byte count for compact display in the media library. */
 export function formatFileSize(bytes: number): string {
   if (bytes < 1024) {
     return `${bytes} B`

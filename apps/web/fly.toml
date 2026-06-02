@@ -6,7 +6,6 @@ primary_region = "lhr"
   dockerfile = "../../apps/web/Dockerfile"
   # VITE_API_BASE_URL is baked into the JS bundle at build time.
   # Pass it with: fly deploy -c apps/web/fly.toml --build-arg VITE_API_BASE_URL=https://rdio-api.fly.dev
-  # If API_KEY is set, also pass: --build-arg VITE_API_KEY=<your-key>
 
 [http_service]
   internal_port        = 80

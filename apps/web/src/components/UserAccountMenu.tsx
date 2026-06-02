@@ -1,9 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 
-const PLACEHOLDER_FIRST_NAME = 'Alex'
-
-export function UserAccountMenu({ firstName = PLACEHOLDER_FIRST_NAME }: { firstName?: string }) {
+export function UserAccountMenu({ firstName, onLogout }: { firstName: string; onLogout: () => void }) {
   const menuId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
   const [isOpen, setIsOpen] = useState(false)
@@ -52,15 +50,10 @@ export function UserAccountMenu({ firstName = PLACEHOLDER_FIRST_NAME }: { firstN
             className="user-account-dropdown-item"
             role="menuitem"
             type="button"
-            onClick={() => setIsOpen(false)}
-          >
-            Profile
-          </button>
-          <button
-            className="user-account-dropdown-item"
-            role="menuitem"
-            type="button"
-            onClick={() => setIsOpen(false)}
+            onClick={() => {
+              setIsOpen(false)
+              onLogout()
+            }}
           >
             Log out
           </button>
