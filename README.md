@@ -6,6 +6,8 @@ The project keeps the product layer in TypeScript and delegates audio delivery t
 
 - React 19 + Vite for the station admin SPA
 - Fastify 5 for the HTTP API
+- Postgres 18 + Drizzle ORM for application data
+- Better Auth for user sessions and member management
 - Shared TypeScript packages for scheduling logic and station config
 - Liquidsoap for playout automation
 - Icecast2 for listener streaming
@@ -18,7 +20,10 @@ The API container can bundle Node.js, Icecast2, and Liquidsoap in a single machi
 
 ```text
 apps/web              Station admin SPA (schedule, programs, hosts, media, broadcast)
-apps/api              HTTP API + bundled Icecast2 + Liquidsoap (production container)
+apps/api              Fastify route plugins + bundled radio services container
+packages/auth         Shared Better Auth server and browser client configuration
+packages/db           Drizzle client, schema, and migrations
+packages/env          Validated database and API environment variables
 packages/rdio-core    Shared scheduling and playout types and logic
 packages/config       Single-station configuration
 services/liquidsoap   Liquidsoap playout script
@@ -69,6 +74,14 @@ docker compose up
 
 The first run downloads the Postgres, Icecast, and Liquidsoap container images. To confirm that the local stream is available, open http://localhost:8000/live.mp3.
 
+Apply database migrations before starting the apps:
+
+```bash
+pnpm db:migrate
+```
+
+Open http://localhost:5173 after the API starts. The first browser to complete setup creates the station administrator. After that, new accounts can only be created by an authenticated administrator from the Members view.
+
 Default local endpoints:
 
 | Service | URL |
@@ -88,21 +101,21 @@ Default local endpoints:
 | `POSTGRES_PASSWORD` | `rdio` | Local Compose Postgres password |
 | `DATABASE_URL` | `postgres://rdio:rdio@localhost:5432/rdio` | Postgres connection string |
 | `API_PORT` | `3001` | Port the Fastify API listens on |
-| `API_KEY` | _(blank)_ | Shared secret for write endpoints. Leave blank to disable auth |
 | `WEB_ORIGIN` | `http://localhost:5173` | Allowed CORS origin |
+| `BETTER_AUTH_SECRET` | _(required)_ | Strong random secret used to sign Better Auth cookies and tokens |
+| `BETTER_AUTH_URL` | `http://localhost:3001` | Public API origin used by Better Auth |
 | `VITE_API_BASE_URL` | `http://localhost:3001` | API base URL baked into the web build at build time |
-| `VITE_API_KEY` | _(blank)_ | Must match `API_KEY`. Baked into the web build at build time |
 | `PUBLIC_STREAM_BASE_URL` | _(request origin)_ | Optional public stream origin used to build `streamUrl` in API responses. Leave blank to use the API's `/live.mp3` proxy |
 | `ICECAST_HOST` | `localhost` | Icecast host (Liquidsoap connects here) |
 | `ICECAST_PORT` | `8001` in the bundled API container, `8000` for local Docker Compose Icecast | Icecast port |
 | `HARBOR_PORT` | `8005` | Liquidsoap Harbor port for BUTT live broadcast source connections |
 | `ICECAST_SOURCE_PASSWORD` | `sourcepass` | Icecast source password |
 
-In a bundled production container, `ICECAST_HOST=localhost` and `ICECAST_PORT=8001` since Icecast runs inside the same container. `API_KEY` and `VITE_API_KEY` should be set to the same strong secret. Set `PUBLIC_STREAM_BASE_URL` only when browsers should play from a separate public Icecast origin instead of the API proxy.
+In a bundled production container, `ICECAST_HOST=localhost` and `ICECAST_PORT=8001` since Icecast runs inside the same container. Set `PUBLIC_STREAM_BASE_URL` only when browsers should play from a separate public Icecast origin instead of the API proxy.
 
 ## Database development
 
-Postgres and Drizzle are configured for the staged database migration. The current API still stores station content under `media/`; later migrations will move domain data into Postgres incrementally.
+Postgres and Drizzle store authentication data. The API still stores station content under `media/`; later migrations can move domain data into Postgres incrementally.
 
 ```bash
 pnpm db:up
@@ -127,7 +140,9 @@ Set required secrets:
 
 | Secret | Description |
 |--------|-------------|
-| `API_KEY` | Shared secret for authenticated API endpoints |
+| `DATABASE_URL` | Postgres connection string |
+| `BETTER_AUTH_SECRET` | Strong random secret used to sign Better Auth cookies and tokens |
+| `BETTER_AUTH_URL` | Public API origin used by Better Auth |
 | `ICECAST_SOURCE_PASSWORD` | Password Liquidsoap uses to publish to Icecast |
 
 Mount persistent storage at `/media`, then add a fallback audio file so Liquidsoap has something to play when nothing is scheduled:
@@ -139,12 +154,11 @@ cp /path/to/fallback.mp3 /media/fallback/v1-tone.mp3
 
 ### Web
 
-The web app can be deployed by building `apps/web` with the API URL and shared API key available at build time. If using GitHub Actions, set these repository secrets:
+The web app can be deployed by building `apps/web` with the API URL available at build time. If using GitHub Actions, set this repository secret:
 
 | Secret | Value |
 |--------|-------|
 | `VITE_API_BASE_URL` | Public API origin |
-| `VITE_API_KEY` | Same value as the API's `API_KEY` secret |
 
 Build manually from the repo root:
 
@@ -183,7 +197,7 @@ GET  /live.mp3                  Live audio stream (proxied from internal Icecast
 GET  /media/:id                 Serve a media file
 ```
 
-### Admin (require `Authorization: Bearer <API_KEY>` when `API_KEY` is set)
+### Authenticated station UI
 
 ```
 GET    /schedule-blocks         All schedule blocks
@@ -201,6 +215,17 @@ GET    /media                   List uploaded media files
 POST   /media                   Upload a media file (binary body, X-File-Name header)
 DELETE /media/:id               Delete a media file; triggers playout refresh
 GET    /playout/current         Current Liquidsoap playout file path
+```
+
+### Authentication and members
+
+```
+GET    /auth/setup-status       Whether the first administrator still needs to be created
+GET    /auth/me                 Current authenticated session
+POST   /auth/change-password    Replace a temporary password
+GET    /members                 List members (administrator only)
+POST   /members                 Create a member with a temporary password (administrator only)
+*      /api/auth/*              Better Auth session endpoints
 ```
 
 ## Station config

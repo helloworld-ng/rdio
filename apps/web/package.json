@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@rdio/auth": "workspace:*",
     "@rdio/rdio-core": "workspace:*",
     "@vitejs/plugin-react": "^4.3.4",
     "lucide-react": "^1.14.0",
