@@ -29,7 +29,7 @@ services/icecast      Icecast config templates (used for local Docker dev)
 
 - Node.js 22+
 - pnpm 9+
-- Docker (for local Icecast and Liquidsoap)
+- Docker (for local Postgres, Icecast, and Liquidsoap)
 
 ## Local development
 
@@ -60,14 +60,14 @@ pnpm web:dev
 pnpm worker:dev
 ```
 
-Start the radio infrastructure (Icecast + Liquidsoap):
+Start the local infrastructure (Postgres + Icecast + Liquidsoap):
 
 ```bash
 cp .env.example .env
 docker compose up
 ```
 
-The first run downloads the Icecast and Liquidsoap container images. To confirm that the local stream is available, open http://localhost:8000/live.mp3.
+The first run downloads the Postgres, Icecast, and Liquidsoap container images. To confirm that the local stream is available, open http://localhost:8000/live.mp3.
 
 Default local endpoints:
 
@@ -75,6 +75,7 @@ Default local endpoints:
 |---------|-----|
 | Web admin | http://localhost:5173 |
 | API | http://localhost:3001 |
+| Postgres | postgres://rdio:rdio@localhost:5432/rdio |
 | Icecast admin | http://localhost:8000/admin |
 | Stream | http://localhost:3001/live.mp3 |
 
@@ -82,6 +83,10 @@ Default local endpoints:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `POSTGRES_DB` | `rdio` | Local Compose Postgres database name |
+| `POSTGRES_USER` | `rdio` | Local Compose Postgres user |
+| `POSTGRES_PASSWORD` | `rdio` | Local Compose Postgres password |
+| `DATABASE_URL` | `postgres://rdio:rdio@localhost:5432/rdio` | Postgres connection string |
 | `API_PORT` | `3001` | Port the Fastify API listens on |
 | `API_KEY` | _(blank)_ | Shared secret for write endpoints. Leave blank to disable auth |
 | `WEB_ORIGIN` | `http://localhost:5173` | Allowed CORS origin |
@@ -94,6 +99,19 @@ Default local endpoints:
 | `ICECAST_SOURCE_PASSWORD` | `sourcepass` | Icecast source password |
 
 In a bundled production container, `ICECAST_HOST=localhost` and `ICECAST_PORT=8001` since Icecast runs inside the same container. `API_KEY` and `VITE_API_KEY` should be set to the same strong secret. Set `PUBLIC_STREAM_BASE_URL` only when browsers should play from a separate public Icecast origin instead of the API proxy.
+
+## Database development
+
+Postgres and Drizzle are configured for the staged database migration. The current API still stores station content under `media/`; later migrations will move domain data into Postgres incrementally.
+
+```bash
+pnpm db:up
+pnpm db:generate
+pnpm db:migrate
+pnpm db:studio
+```
+
+Use `pnpm db:push` for rapid local schema prototyping and `pnpm db:check` to validate generated migrations.
 
 ## Deployment
 

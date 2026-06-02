@@ -1,4 +1,20 @@
 services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-rdio}
+      POSTGRES_USER: ${POSTGRES_USER:-rdio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rdio}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rdio} -d ${POSTGRES_DB:-rdio}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   icecast:
     image: moul/icecast
     environment:
@@ -25,19 +41,5 @@ services:
       - "8005:8005"
     command: liquidsoap /rdio/station.liq
 
-# Postgres is defined for when packages/db is implemented.
-# Uncomment to start the database alongside the radio services.
-#
-#  postgres:
-#    image: postgres:16-alpine
-#    environment:
-#      POSTGRES_DB: rdio
-#      POSTGRES_USER: rdio
-#      POSTGRES_PASSWORD: rdio
-#    ports:
-#      - "5432:5432"
-#    volumes:
-#      - postgres_data:/var/lib/postgresql/data
-
-#volumes:
-#  postgres_data:
+volumes:
+  postgres_data:

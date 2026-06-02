@@ -8,15 +8,22 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:check": "drizzle-kit check"
   },
   "dependencies": {
-    "drizzle-orm": "^0.38.3",
-    "pg": "^8.13.1"
+    "drizzle-orm": "^0.45.2",
+    "pg": "^8.21.0"
   },
   "devDependencies": {
     "@rdio/tsconfig": "workspace:*",
-    "@types/pg": "^8.11.10",
+    "@types/pg": "^8.20.0",
+    "dotenv": "^17.4.2",
+    "drizzle-kit": "^0.31.10",
     "typescript": "^5.7.2"
   }
 }
