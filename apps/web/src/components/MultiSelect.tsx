@@ -1,16 +1,16 @@
-import React, { useEffect, useId, useRef, useState } from 'react'
-import { Check, ChevronDown, X } from 'lucide-react'
+import { Check, ChevronDown, X } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
 
 interface MultiSelectProps {
-  options: string[]
-  value: string[]
-  onChange: (value: string[]) => void
-  disabled?: boolean
-  placeholder?: string
-  multiple?: boolean
-  label?: string
-  onCreateOption?: (value: string) => void
-  createPlaceholder?: string
+  createPlaceholder?: string;
+  disabled?: boolean;
+  label?: string;
+  multiple?: boolean;
+  onChange: (value: string[]) => void;
+  onCreateOption?: (value: string) => void;
+  options: string[];
+  placeholder?: string;
+  value: string[];
 }
 
 export function MultiSelect({
@@ -18,93 +18,97 @@ export function MultiSelect({
   value,
   onChange,
   disabled = false,
-  placeholder = 'Select…',
+  placeholder = "Select…",
   multiple = true,
   label,
   onCreateOption,
-  createPlaceholder = 'Add new…',
+  createPlaceholder = "Add new…",
 }: MultiSelectProps) {
-  const listboxId = useId()
-  const rootRef = useRef<HTMLDivElement>(null)
-  const [isOpen, setIsOpen] = useState(false)
-  const [createValue, setCreateValue] = useState('')
+  const listboxId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [createValue, setCreateValue] = useState("");
 
   useEffect(() => {
     if (!isOpen) {
-      return
+      return;
     }
 
     const handlePointerDown = (event: MouseEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) {
-        setIsOpen(false)
+        setIsOpen(false);
       }
-    }
+    };
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsOpen(false)
+      if (event.key === "Escape") {
+        setIsOpen(false);
       }
-    }
+    };
 
-    document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isOpen])
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
 
   const toggleOption = (option: string) => {
     if (disabled) {
-      return
+      return;
     }
 
     if (multiple) {
-      onChange(value.includes(option) ? value.filter((item) => item !== option) : [...value, option])
-      return
+      onChange(
+        value.includes(option)
+          ? value.filter((item) => item !== option)
+          : [...value, option]
+      );
+      return;
     }
 
-    onChange(value.includes(option) ? [] : [option])
-    setIsOpen(false)
-  }
+    onChange(value.includes(option) ? [] : [option]);
+    setIsOpen(false);
+  };
 
   const removeValue = (option: string) => {
     if (disabled) {
-      return
+      return;
     }
 
-    onChange(value.filter((item) => item !== option))
-  }
+    onChange(value.filter((item) => item !== option));
+  };
 
   const createOption = () => {
-    const normalized = createValue.trim()
+    const normalized = createValue.trim();
 
-    if (!normalized || !onCreateOption) {
-      return
+    if (!(normalized && onCreateOption)) {
+      return;
     }
 
-    onCreateOption(normalized)
+    onCreateOption(normalized);
 
     if (multiple) {
-      onChange(value.includes(normalized) ? value : [...value, normalized])
+      onChange(value.includes(normalized) ? value : [...value, normalized]);
     } else {
-      onChange([normalized])
-      setIsOpen(false)
+      onChange([normalized]);
+      setIsOpen(false);
     }
 
-    setCreateValue('')
-  }
+    setCreateValue("");
+  };
 
   const control = (
-    <div className={`multi-select${isOpen ? ' is-open' : ''}`} ref={rootRef}>
+    <div className={`multi-select${isOpen ? "is-open" : ""}`} ref={rootRef}>
       <button
         aria-controls={listboxId}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         className="multi-select-trigger"
         disabled={disabled}
-        type="button"
         onClick={() => setIsOpen((current) => !current)}
+        type="button"
       >
         <span className="multi-select-values">
           {value.length === 0 ? (
@@ -114,66 +118,75 @@ export function MultiSelect({
               <span className="multi-select-chip" key={item}>
                 {item}
                 {multiple && !disabled ? (
-                  <span
+                  <button
                     aria-label={`Remove ${item}`}
                     className="multi-select-chip-remove"
-                    role="button"
-                    tabIndex={0}
                     onClick={(event) => {
-                      event.stopPropagation()
-                      removeValue(item)
+                      event.stopPropagation();
+                      removeValue(item);
                     }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault()
-                        event.stopPropagation()
-                        removeValue(item)
-                      }
-                    }}
+                    type="button"
                   >
                     <X aria-hidden="true" size={12} strokeWidth={2} />
-                  </span>
+                  </button>
                 ) : null}
               </span>
             ))
           )}
         </span>
-        <ChevronDown aria-hidden="true" className="multi-select-chevron" size={16} strokeWidth={1.8} />
+        <ChevronDown
+          aria-hidden="true"
+          className="multi-select-chevron"
+          size={16}
+          strokeWidth={1.8}
+        />
       </button>
       {isOpen && !disabled ? (
         <div className="multi-select-menu" id={listboxId} role="listbox">
-          {options.length === 0 ? <p className="multi-select-empty">No options yet</p> : null}
+          {options.length === 0 ? (
+            <p className="multi-select-empty">No options yet</p>
+          ) : null}
           {options.map((option) => {
-            const isSelected = value.includes(option)
+            const isSelected = value.includes(option);
 
             return (
               <button
                 aria-selected={isSelected}
-                className={isSelected ? 'multi-select-option is-selected' : 'multi-select-option'}
+                className={
+                  isSelected
+                    ? "multi-select-option is-selected"
+                    : "multi-select-option"
+                }
                 key={option}
+                onClick={() => toggleOption(option)}
                 role="option"
                 type="button"
-                onClick={() => toggleOption(option)}
               >
                 <span>{option}</span>
-                {isSelected ? <Check aria-hidden="true" size={14} strokeWidth={2} /> : null}
+                {isSelected ? (
+                  <Check aria-hidden="true" size={14} strokeWidth={2} />
+                ) : null}
               </button>
-            )
+            );
           })}
           {onCreateOption ? (
             <div className="multi-select-create">
               <input
-                placeholder={createPlaceholder}
-                value={createValue}
                 onChange={(event) => setCreateValue(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    createOption()
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    createOption();
                   }
                 }}
+                placeholder={createPlaceholder}
+                value={createValue}
               />
-              <button disabled={!createValue.trim()} type="button" onClick={createOption}>
+              <button
+                disabled={!createValue.trim()}
+                onClick={createOption}
+                type="button"
+              >
                 Add
               </button>
             </div>
@@ -181,16 +194,16 @@ export function MultiSelect({
         </div>
       ) : null}
     </div>
-  )
+  );
 
   if (!label) {
-    return control
+    return control;
   }
 
   return (
-    <label className="multi-select-field">
+    <div className="multi-select-field">
       <span>{label}</span>
       {control}
-    </label>
-  )
+    </div>
+  );
 }

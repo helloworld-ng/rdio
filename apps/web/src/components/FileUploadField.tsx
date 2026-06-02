@@ -1,20 +1,20 @@
-import { useEffect, useMemo } from 'react'
-import { MediaPreviewThumb } from './MediaPreviewThumb'
+import { useEffect, useId, useMemo } from "react";
+import { MediaPreviewThumb } from "./MediaPreviewThumb";
 
-function inferFilePreviewType(file: File): 'audio' | 'image' {
-  return file.type.startsWith('image/') ? 'image' : 'audio'
+function inferFilePreviewType(file: File): "audio" | "image" {
+  return file.type.startsWith("image/") ? "image" : "audio";
 }
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024) {
-    return `${bytes} B`
+    return `${bytes} B`;
   }
 
   if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / 1024).toFixed(1)} KB`;
   }
 
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export function FileUploadField({
@@ -24,39 +24,49 @@ export function FileUploadField({
   label,
   onChange,
 }: {
-  accept: string
-  emptyLabel: string
-  file: File | null
-  label: string
-  onChange: (file: File | null) => void
+  accept: string;
+  emptyLabel: string;
+  file: File | null;
+  label: string;
+  onChange: (file: File | null) => void;
 }) {
-  const previewUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file])
+  const inputId = useId();
+  const previewUrl = useMemo(
+    () => (file ? URL.createObjectURL(file) : null),
+    [file]
+  );
 
-  useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       if (previewUrl) {
-        URL.revokeObjectURL(previewUrl)
+        URL.revokeObjectURL(previewUrl);
       }
-    }
-  }, [previewUrl])
+    },
+    [previewUrl]
+  );
 
   return (
-    <label>
+    <label htmlFor={inputId}>
       <span>{label}</span>
       {file && previewUrl ? (
         <div className="file-control-preview">
-          <MediaPreviewThumb name={file.name} type={inferFilePreviewType(file)} url={previewUrl} />
+          <MediaPreviewThumb
+            name={file.name}
+            type={inferFilePreviewType(file)}
+            url={previewUrl}
+          />
           <div className="file-control-info">
             <strong>{file.name}</strong>
             <span>{formatFileSize(file.size)}</span>
           </div>
           <input
             accept={accept}
-            type="file"
+            id={inputId}
             onChange={(event) => {
-              onChange(event.target.files?.[0] ?? null)
-              event.target.value = ''
+              onChange(event.target.files?.[0] ?? null);
+              event.target.value = "";
             }}
+            type="file"
           />
         </div>
       ) : (
@@ -64,14 +74,15 @@ export function FileUploadField({
           <em>{emptyLabel}</em>
           <input
             accept={accept}
-            type="file"
+            id={inputId}
             onChange={(event) => {
-              onChange(event.target.files?.[0] ?? null)
-              event.target.value = ''
+              onChange(event.target.files?.[0] ?? null);
+              event.target.value = "";
             }}
+            type="file"
           />
         </div>
       )}
     </label>
-  )
+  );
 }

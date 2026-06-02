@@ -1,13 +1,15 @@
-import { useRef, useState } from 'react'
-import { Pause, Play } from 'lucide-react'
+import { Pause, Play } from "lucide-react";
+import { useRef, useState } from "react";
+
+const trailingSlashPattern = /\/$/;
 
 export function resolveMediaUrl(url: string, apiBaseUrl: string) {
-  if (url.startsWith('blob:') || url.startsWith('http')) {
-    return url
+  if (url.startsWith("blob:") || url.startsWith("http")) {
+    return url;
   }
 
-  const base = apiBaseUrl.replace(/\/$/, '')
-  return `${base}${url.startsWith('/') ? url : `/${url}`}`
+  const base = apiBaseUrl.replace(trailingSlashPattern, "");
+  return `${base}${url.startsWith("/") ? url : `/${url}`}`;
 }
 
 export function MediaPreviewThumb({
@@ -16,56 +18,60 @@ export function MediaPreviewThumb({
   name,
   apiBaseUrl,
 }: {
-  type: 'audio' | 'image'
-  url: string
-  name: string
-  apiBaseUrl?: string
+  type: "audio" | "image";
+  url: string;
+  name: string;
+  apiBaseUrl?: string;
 }) {
-  const audioRef = useRef<HTMLAudioElement>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const src = apiBaseUrl ? resolveMediaUrl(url, apiBaseUrl) : url
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const src = apiBaseUrl ? resolveMediaUrl(url, apiBaseUrl) : url;
 
-  if (type === 'image') {
+  if (type === "image") {
     return (
       <div className="file-preview-thumb">
-        <img alt="" src={src} />
+        <img alt="" height={40} src={src} width={40} />
       </div>
-    )
+    );
   }
 
   const togglePlay = () => {
-    const audio = audioRef.current
+    const audio = audioRef.current;
 
     if (!audio) {
-      return
+      return;
     }
 
     if (audio.paused) {
-      void audio.play()
-      return
+      audio.play().catch(() => undefined);
+      return;
     }
 
-    audio.pause()
-  }
+    audio.pause();
+  };
 
   return (
     <div className="file-preview-thumb is-audio">
       <audio
-        preload="metadata"
-        ref={audioRef}
-        src={src}
         onEnded={() => setIsPlaying(false)}
         onPause={() => setIsPlaying(false)}
         onPlay={() => setIsPlaying(true)}
+        preload="metadata"
+        ref={audioRef}
+        src={src}
       />
       <button
         aria-label={isPlaying ? `Pause ${name}` : `Play ${name}`}
         className="file-preview-play"
-        type="button"
         onClick={togglePlay}
+        type="button"
       >
-        {isPlaying ? <Pause aria-hidden="true" size={16} /> : <Play aria-hidden="true" fill="currentColor" size={16} />}
+        {isPlaying ? (
+          <Pause aria-hidden="true" size={16} />
+        ) : (
+          <Play aria-hidden="true" fill="currentColor" size={16} />
+        )}
       </button>
     </div>
-  )
+  );
 }
