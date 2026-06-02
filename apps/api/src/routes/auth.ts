@@ -4,6 +4,23 @@ import type { FastifyInstance } from 'fastify'
 import { requestSession } from '../lib/auth.js'
 import { isRecord, parseJsonBody } from '../lib/station-store.js'
 
+/** Serializes Fastify bodies for the Better Auth handler (global parser uses buffers). */
+function serializeAuthBody(body: unknown) {
+  if (body === undefined) {
+    return undefined
+  }
+
+  if (Buffer.isBuffer(body)) {
+    return body.toString('utf8')
+  }
+
+  if (typeof body === 'string') {
+    return body
+  }
+
+  return JSON.stringify(body)
+}
+
 export async function authRoutes(server: FastifyInstance) {
   server.route({
     method: ['GET', 'POST'],
@@ -11,7 +28,7 @@ export async function authRoutes(server: FastifyInstance) {
     async handler(request, reply) {
       try {
         const url = new URL(request.url, env.BETTER_AUTH_URL)
-        const body = request.body === undefined ? undefined : JSON.stringify(request.body)
+        const body = serializeAuthBody(request.body)
         const authRequest = new Request(url.toString(), {
           method: request.method,
           headers: authHeaders(request.headers),

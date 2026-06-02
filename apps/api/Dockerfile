@@ -25,7 +25,7 @@ COPY apps/api/ apps/api/
 RUN pnpm --filter=@rdio/api... run build
 
 # Self-contained deployable: production node_modules only, no devDeps
-RUN pnpm --filter @rdio/api deploy --prod /app/deploy
+RUN pnpm --filter @rdio/api deploy --prod --legacy /app/deploy
 
 # ── runtime stage ─────────────────────────────────────────────────────────────
 # Liquidsoap as the base so both processes share one container and one volume.
