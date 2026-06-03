@@ -50,4 +50,35 @@ export function memberRoutes(server: FastifyInstance) {
 
     return reply.status(201).send({ member });
   });
+
+  server.delete<{ Params: { id: string } }>("/:id", async (request, reply) => {
+    if (!(await requireAdminSession(request, reply))) {
+      return;
+    }
+
+    await auth.api.removeUser({
+      body: { userId: request.params.id },
+      headers: authHeaders(request.headers),
+    });
+
+    return reply.status(204).send();
+  });
+
+  server.patch<{ Params: { id: string } }>("/:id", async (request, reply) => {
+    if (!(await requireAdminSession(request, reply))) {
+      return;
+    }
+
+    const body = parseJsonBody(request.body);
+    if (!isRecord(body) || typeof body.role !== "string") {
+      return reply.status(400).send({ error: "role is required" });
+    }
+
+    const updated = await auth.api.setRole({
+      body: { userId: request.params.id, role: body.role },
+      headers: authHeaders(request.headers),
+    });
+
+    return reply.status(200).send(updated);
+  });
 }
