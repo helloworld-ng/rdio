@@ -1,13 +1,13 @@
-import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { UserPlus } from "lucide-react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { apiBaseUrl, apiFetch } from "../lib/api";
 
 interface Member {
-  id: string;
-  name: string;
   email: string;
-  role?: string | null;
+  id: string;
   mustChangePassword?: boolean;
+  name: string;
+  role?: string | null;
 }
 
 interface MembersResponse {
@@ -34,7 +34,7 @@ export function MembersPage() {
       setError(
         loadError instanceof Error
           ? loadError.message
-          : "Could not load members.",
+          : "Could not load members."
       );
     });
   }, [loadMembers]);
@@ -71,7 +71,7 @@ export function MembersPage() {
   }
 
   return (
-    <section className="library-view members-view" aria-label="Members">
+    <section aria-label="Members" className="library-view members-view">
       <div className="library-header">
         <div>
           <UserPlus aria-hidden="true" size={18} strokeWidth={1.8} />
@@ -81,26 +81,26 @@ export function MembersPage() {
       <form className="member-create-form" onSubmit={createMember}>
         <label>
           Name
-          <input name="name" autoComplete="name" required />
+          <input autoComplete="name" name="name" required />
         </label>
         <label>
           Email
-          <input name="email" type="email" autoComplete="email" required />
+          <input autoComplete="email" name="email" required type="email" />
         </label>
         <label>
           Temporary password
           <input
-            name="password"
-            type="password"
             autoComplete="new-password"
             minLength={8}
+            name="password"
             required
+            type="password"
           />
         </label>
         <button
           className="primary-action"
-          type="submit"
           disabled={isSubmitting}
+          type="submit"
         >
           {isSubmitting ? "Creating..." : "Add member"}
         </button>

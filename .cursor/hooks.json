@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "afterFileEdit": [
+      {
+        "command": "pnpm run format --skip=correctness/noUnusedImports"
+      }
+    ]
+  },
+  "version": 1
+}

@@ -15,3 +15,6 @@ media/schedule/*
 .DS_Store
 **/.DS_Store
 media/.DS_Store
+
+# Local reference files
+school

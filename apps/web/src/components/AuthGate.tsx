@@ -12,16 +12,16 @@ import { apiBaseUrl, apiFetch } from "../lib/api";
 import { authClient } from "../lib/auth-client";
 
 interface AuthUser {
-  id: string;
-  name: string;
   email: string;
-  role?: string | null;
+  id: string;
   mustChangePassword: boolean;
+  name: string;
+  role?: string | null;
 }
 
 interface AuthContextValue {
-  user: AuthUser;
   logout: () => Promise<void>;
+  user: AuthUser;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -52,10 +52,14 @@ export function AuthGate({ children }: PropsWithChildren) {
         }
 
         const data = (await response.json()) as { setupRequired: boolean };
-        if (!cancelled) setSetupRequired(data.setupRequired);
+        if (!cancelled) {
+          setSetupRequired(data.setupRequired);
+        }
       })
       .catch(() => {
-        if (!cancelled) setSetupRequired(false);
+        if (!cancelled) {
+          setSetupRequired(false);
+        }
       });
 
     return () => {
@@ -66,8 +70,8 @@ export function AuthGate({ children }: PropsWithChildren) {
   if (session.isPending || (!session.data && setupRequired === null)) {
     return (
       <AuthPage
-        title="Loading station"
         description="Checking your session..."
+        title="Loading station"
       />
     );
   }
@@ -154,8 +158,8 @@ function SetupForm({ onComplete }: { onComplete: () => void }) {
 
   return (
     <AuthPage
-      title="Set up your station"
       description="Create the first administrator account. Additional members can be added after sign-in."
+      title="Set up your station"
     >
       <AuthForm
         error={error}
@@ -165,27 +169,29 @@ function SetupForm({ onComplete }: { onComplete: () => void }) {
       >
         <label>
           Name
-          <input name="name" autoComplete="name" required />
+          <input autoComplete="name" name="name" required />
         </label>
         <label>
           Email
-          <input name="email" type="email" autoComplete="email" required />
+          <input autoComplete="email" name="email" required type="email" />
         </label>
-        <label>
+        <label htmlFor="setup-password">
           Password
           <PasswordInput
-            name="password"
             autoComplete="new-password"
+            id="setup-password"
             minLength={8}
+            name="password"
             required
           />
         </label>
-        <label>
+        <label htmlFor="setup-confirm-password">
           Confirm password
           <PasswordInput
-            name="confirmPassword"
             autoComplete="new-password"
+            id="setup-confirm-password"
             minLength={8}
+            name="confirmPassword"
             required
           />
         </label>
@@ -220,8 +226,8 @@ function LoginForm({ onComplete }: { onComplete: () => void }) {
 
   return (
     <AuthPage
-      title="Sign in"
       description="Use your station account to open the control room."
+      title="Sign in"
     >
       <AuthForm
         error={error}
@@ -231,13 +237,14 @@ function LoginForm({ onComplete }: { onComplete: () => void }) {
       >
         <label>
           Email
-          <input name="email" type="email" autoComplete="email" required />
+          <input autoComplete="email" name="email" required type="email" />
         </label>
-        <label>
+        <label htmlFor="login-password">
           Password
           <PasswordInput
-            name="password"
             autoComplete="current-password"
+            id="login-password"
+            name="password"
             required
           />
         </label>
@@ -285,8 +292,8 @@ function ChangePasswordForm({ onComplete }: { onComplete: () => void }) {
 
   return (
     <AuthPage
-      title="Choose a new password"
       description="Replace the temporary password before opening the station dashboard."
+      title="Choose a new password"
     >
       <AuthForm
         error={error}
@@ -294,29 +301,32 @@ function ChangePasswordForm({ onComplete }: { onComplete: () => void }) {
         onSubmit={submit}
         submitLabel="Update password"
       >
-        <label>
+        <label htmlFor="change-current-password">
           Temporary password
           <PasswordInput
-            name="currentPassword"
             autoComplete="current-password"
+            id="change-current-password"
+            name="currentPassword"
             required
           />
         </label>
-        <label>
+        <label htmlFor="change-new-password">
           New password
           <PasswordInput
-            name="newPassword"
             autoComplete="new-password"
+            id="change-new-password"
             minLength={8}
+            name="newPassword"
             required
           />
         </label>
-        <label>
+        <label htmlFor="change-confirm-password">
           Confirm new password
           <PasswordInput
-            name="confirmation"
             autoComplete="new-password"
+            id="change-confirm-password"
             minLength={8}
+            name="confirmation"
             required
           />
         </label>
@@ -326,7 +336,7 @@ function ChangePasswordForm({ onComplete }: { onComplete: () => void }) {
 }
 
 function PasswordInput(
-  props: Omit<InputHTMLAttributes<HTMLInputElement>, "type">,
+  props: Omit<InputHTMLAttributes<HTMLInputElement>, "type">
 ) {
   const [visible, setVisible] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -341,19 +351,39 @@ function PasswordInput(
     <span className="password-input-wrap">
       <input {...props} ref={inputRef} type={visible ? "text" : "password"} />
       <button
-        type="button"
+        aria-label={visible ? "Hide password" : "Show password"}
         className="password-toggle"
         onClick={toggle}
-        aria-label={visible ? "Hide password" : "Show password"}
+        type="button"
       >
         {visible ? (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            aria-hidden="true"
+            fill="none"
+            height="16"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            viewBox="0 0 24 24"
+            width="16"
+          >
             <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
             <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-            <line x1="1" y1="1" x2="23" y2="23" />
+            <line x1="1" x2="23" y1="1" y2="23" />
           </svg>
         ) : (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            aria-hidden="true"
+            fill="none"
+            height="16"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            viewBox="0 0 24 24"
+            width="16"
+          >
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
             <circle cx="12" cy="12" r="3" />
           </svg>
@@ -379,7 +409,7 @@ function AuthForm({
     <form className="auth-form" onSubmit={onSubmit}>
       {children}
       {error ? <p className="form-error">{error}</p> : null}
-      <button className="primary-action" type="submit" disabled={isSubmitting}>
+      <button className="primary-action" disabled={isSubmitting} type="submit">
         {isSubmitting ? "Working..." : submitLabel}
       </button>
     </form>

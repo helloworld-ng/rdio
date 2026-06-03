@@ -1,9 +1,9 @@
-import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
+import type { FastifyInstance } from "fastify";
 import {
   isRecord,
-  parseJsonBody,
   type Program,
+  parseJsonBody,
   readAllScheduleBlocks,
   readPrograms,
   scheduleVersion,
@@ -11,7 +11,7 @@ import {
   writePrograms,
 } from "../lib/station-store.js";
 
-export async function programRoutes(server: FastifyInstance) {
+export function programRoutes(server: FastifyInstance) {
   server.get("/", async () => ({ programs: await readPrograms() }));
 
   server.post("/", async (request, reply) => {
@@ -52,8 +52,9 @@ export async function programRoutes(server: FastifyInstance) {
     }
     const programs = await readPrograms();
     const index = programs.findIndex((program) => program.id === id);
-    if (index === -1)
+    if (index === -1) {
       return reply.status(404).send({ error: "Program not found" });
+    }
     const program: Program = {
       id,
       title: body.title,
@@ -71,7 +72,7 @@ export async function programRoutes(server: FastifyInstance) {
             description: program.description,
             hosts: [program.host],
           }
-        : block,
+        : block
     );
     await writeAllScheduleBlocks(updatedBlocks);
     return { program, blocks: updatedBlocks, version: await scheduleVersion() };
@@ -83,7 +84,7 @@ export async function programRoutes(server: FastifyInstance) {
     await writePrograms(programs.filter((program) => program.id !== id));
     const blocks = await readAllScheduleBlocks();
     const updatedBlocks = blocks.map((block) =>
-      block.programId === id ? { ...block, programId: undefined } : block,
+      block.programId === id ? { ...block, programId: undefined } : block
     );
     await writeAllScheduleBlocks(updatedBlocks);
     return { blocks: updatedBlocks, version: await scheduleVersion() };

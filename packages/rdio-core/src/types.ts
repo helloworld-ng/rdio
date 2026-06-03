@@ -1,61 +1,61 @@
 export type PlayoutSource =
-  | { kind: 'playlist'; playlistId: string }
-  | { kind: 'track'; trackId: string }
-  | { kind: 'live'; inputId: string }
+  | { kind: "playlist"; playlistId: string }
+  | { kind: "track"; trackId: string }
+  | { kind: "live"; inputId: string };
 
-export type FallbackSource = PlayoutSource | { kind: 'fallback' }
+export type FallbackSource = PlayoutSource | { kind: "fallback" };
 
 export interface ScheduleSlot {
-  id: string
-  stationId: string
-  title: string
-  startsAt: string
-  endsAt: string
-  source: PlayoutSource
+  endsAt: string;
+  id: string;
+  source: PlayoutSource;
+  startsAt: string;
+  stationId: string;
+  title: string;
 }
 
 export interface ScheduleConflict {
-  firstSlotId: string
-  secondSlotId: string
-  reason: 'overlap'
+  firstSlotId: string;
+  reason: "overlap";
+  secondSlotId: string;
 }
 
 export interface PlayoutPlan {
-  generatedAt: string
-  currentSlot: ScheduleSlot | null
-  source: FallbackSource
+  currentSlot: ScheduleSlot | null;
+  generatedAt: string;
+  source: FallbackSource;
 }
 
 export interface RadioStation {
-  id: string
-  name: string
-  slug: string
-  timezone: string
-  mount: string
-  streamUrl: string
-  fallbackSource: FallbackSource
-  schedule: ScheduleSlot[]
+  fallbackSource: FallbackSource;
+  id: string;
+  mount: string;
+  name: string;
+  schedule: ScheduleSlot[];
+  slug: string;
+  streamUrl: string;
+  timezone: string;
 }
 
-export type StationScheduleSlotInput = Omit<ScheduleSlot, 'stationId'> & {
-  stationId?: string
-}
+export type StationScheduleSlotInput = Omit<ScheduleSlot, "stationId"> & {
+  stationId?: string;
+};
 
 export interface RadioStationInput {
-  id: string
-  name: string
-  slug?: string
-  timezone?: string
-  mount?: string
-  streamUrl?: string
-  fallbackSource?: FallbackSource
-  schedule?: StationScheduleSlotInput[]
+  fallbackSource?: FallbackSource;
+  id: string;
+  mount?: string;
+  name: string;
+  schedule?: StationScheduleSlotInput[];
+  slug?: string;
+  streamUrl?: string;
+  timezone?: string;
 }
 
 export interface ScheduleSnapshot {
-  stationId: string
-  generatedAt: string
-  currentProgram: ScheduleSlot | null
-  upcomingPrograms: ScheduleSlot[]
-  conflicts: ScheduleConflict[]
+  conflicts: ScheduleConflict[];
+  currentProgram: ScheduleSlot | null;
+  generatedAt: string;
+  stationId: string;
+  upcomingPrograms: ScheduleSlot[];
 }
