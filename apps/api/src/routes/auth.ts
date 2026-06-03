@@ -10,6 +10,7 @@ import { requestSession } from "../lib/auth.js";
 import { isRecord, parseJsonBody } from "../lib/station-store.js";
 
 export function authRoutes(server: FastifyInstance) {
+
   server.route({
     method: ["GET", "POST"],
     url: "/api/auth/*",
@@ -18,6 +19,7 @@ export function authRoutes(server: FastifyInstance) {
         const url = new URL(request.url, env.BETTER_AUTH_URL);
         const body =
           request.body === undefined ? undefined : JSON.stringify(request.body);
+
         const authRequest = new Request(url.toString(), {
           method: request.method,
           headers: authHeaders(request.headers),
