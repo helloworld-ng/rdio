@@ -68,6 +68,19 @@ button {
   background: var(--color-paper);
 }
 
+.schedule-save-status {
+  position: absolute;
+  top: 42px;
+  left: 50%;
+  z-index: 10;
+  padding: 4px 12px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-muted);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
 .app-shell {
   --player-bar-inset: 0px;
   --sidebar-padding-inline: 16px;

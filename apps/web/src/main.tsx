@@ -576,6 +576,7 @@ function App() {
     "idle" | "saving" | "saved"
   >("idle");
   const scheduleVersionRef = useRef<string | null>(null);
+  const isScheduleInitializedRef = useRef(false);
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [mediaFilter, setMediaFilter] = useState<"all" | MediaItem["type"]>(
     "all"
@@ -751,6 +752,11 @@ function App() {
       return;
     }
 
+    if (!isScheduleInitializedRef.current) {
+      isScheduleInitializedRef.current = true;
+      return;
+    }
+
     const timeout = window.setTimeout(() => {
       setScheduleSaveState("saving");
       const saveSchedule = async () => {
@@ -793,6 +799,7 @@ function App() {
 
           setScheduleSaveState("saved");
           setScheduleSaveError("");
+          window.setTimeout(() => setScheduleSaveState("idle"), 2000);
         } catch {
           setScheduleSaveState("idle");
           setScheduleSaveError("Could not save schedule changes.");
@@ -3306,7 +3313,15 @@ if (!rootElement) {
   throw new Error("Root element was not found.");
 }
 
-createRoot(rootElement).render(
+const existingRoot = (
+  rootElement as Element & { _reactRoot?: ReturnType<typeof createRoot> }
+)._reactRoot;
+const root = existingRoot ?? createRoot(rootElement);
+(
+  rootElement as Element & { _reactRoot?: ReturnType<typeof createRoot> }
+)._reactRoot = root;
+
+root.render(
   <AuthGate>
     <App />
   </AuthGate>
