@@ -32,8 +32,6 @@ export const broadcastStatusFile = path.join(
 );
 const liquidsoapMediaRoot = "/media/uploads";
 const fallbackPlayoutPath = "/media/fallback/v1-tone.mp3";
-const programsFile = path.join(repoRoot, "media/programs.json");
-const hostsFile = path.join(repoRoot, "media/hosts.json");
 
 export type MediaType = "audio" | "image";
 
@@ -64,18 +62,6 @@ export interface ScheduleBlock {
   programId?: string;
   startMinutes: number;
   title: string;
-}
-
-export interface Program {
-  description: string;
-  host: string;
-  id: string;
-  title: string;
-}
-
-export interface HostRecord {
-  colorId: string;
-  name: string;
 }
 
 export interface ScheduleBlockConflict {
@@ -335,44 +321,6 @@ export async function writeAllScheduleBlocks(blocks: ScheduleBlock[]) {
   for (const day of existing) {
     await rm(path.join(scheduleDirectory, `${day}.json`), { force: true });
   }
-}
-
-/** Reads the locally persisted program catalog. */
-export async function readPrograms(): Promise<Program[]> {
-  try {
-    const raw = await readFile(programsFile, "utf8");
-    const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? (parsed as Program[]) : [];
-  } catch (error) {
-    if (isRecord(error) && error.code === "ENOENT") {
-      return [];
-    }
-    throw error;
-  }
-}
-
-/** Replaces the locally persisted program catalog. */
-export async function writePrograms(programs: Program[]) {
-  await writeFile(programsFile, `${JSON.stringify(programs, null, 2)}\n`);
-}
-
-/** Reads the locally persisted host catalog. */
-export async function readHosts(): Promise<HostRecord[]> {
-  try {
-    const raw = await readFile(hostsFile, "utf8");
-    const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? (parsed as HostRecord[]) : [];
-  } catch (error) {
-    if (isRecord(error) && error.code === "ENOENT") {
-      return [];
-    }
-    throw error;
-  }
-}
-
-/** Replaces the locally persisted host catalog. */
-export async function writeHosts(hosts: HostRecord[]) {
-  await writeFile(hostsFile, `${JSON.stringify(hosts, null, 2)}\n`);
 }
 
 function stationClock(station: RadioStation, at = new Date()) {

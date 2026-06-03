@@ -2,10 +2,19 @@ import { databaseEnv } from "@rdio/env/database";
 import { count, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { account, session, user, verification } from "./schema/index.js";
+import {
+  account,
+  hosts,
+  programs,
+  session,
+  user,
+  verification,
+} from "./schema/index.js";
 
 const schema = {
   account,
+  hosts,
+  programs,
   session,
   user,
   verification,

@@ -13,7 +13,9 @@
     "@fastify/cors": "^11.2.0",
     "@rdio/auth": "workspace:*",
     "@rdio/config": "workspace:*",
+    "@rdio/db": "workspace:*",
     "@rdio/env": "workspace:*",
+    "drizzle-orm": "^0.45.2",
     "@rdio/rdio-core": "workspace:*",
     "fastify": "^5.1.0"
   },

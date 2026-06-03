@@ -1,19 +1,16 @@
+import { db, hosts, programs } from "@rdio/db";
+import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import {
-  type HostRecord,
   isRecord,
   parseJsonBody,
   readAllScheduleBlocks,
-  readHosts,
-  readPrograms,
   scheduleVersion,
   writeAllScheduleBlocks,
-  writeHosts,
-  writePrograms,
 } from "../lib/station-store.js";
 
 export function hostRoutes(server: FastifyInstance) {
-  server.get("/", async () => ({ hosts: await readHosts() }));
+  server.get("/", async () => ({ hosts: await db.select().from(hosts) }));
 
   server.post("/", async (request, reply) => {
     const body = parseJsonBody(request.body);
@@ -24,12 +21,15 @@ export function hostRoutes(server: FastifyInstance) {
     ) {
       return reply.status(400).send({ error: "name and colorId are required" });
     }
-    const host: HostRecord = { name: body.name.trim(), colorId: body.colorId };
-    const hosts = await readHosts();
-    if (hosts.some((entry) => entry.name === host.name)) {
+    const host = { name: body.name.trim(), colorId: body.colorId };
+    const existing = await db
+      .select()
+      .from(hosts)
+      .where(eq(hosts.name, host.name));
+    if (existing.length > 0) {
       return reply.status(409).send({ error: "Host already exists" });
     }
-    await writeHosts([...hosts, host]);
+    await db.insert(hosts).values(host);
     return reply.status(201).send({ host });
   });
 
@@ -43,27 +43,21 @@ export function hostRoutes(server: FastifyInstance) {
     ) {
       return reply.status(400).send({ error: "name and colorId are required" });
     }
-    const newHost: HostRecord = {
-      name: body.name.trim(),
-      colorId: body.colorId,
-    };
-    const hosts = await readHosts();
-    const index = hosts.findIndex((host) => host.name === oldName);
-    if (index === -1) {
+    const newHost = { name: body.name.trim(), colorId: body.colorId };
+    const existing = await db
+      .select()
+      .from(hosts)
+      .where(eq(hosts.name, oldName));
+    if (existing.length === 0) {
       return reply.status(404).send({ error: "Host not found" });
     }
-    hosts[index] = newHost;
-    await writeHosts(hosts);
+    await db.update(hosts).set(newHost).where(eq(hosts.name, oldName));
 
     if (oldName !== newHost.name) {
-      const programs = await readPrograms();
-      await writePrograms(
-        programs.map((program) =>
-          program.host === oldName
-            ? { ...program, host: newHost.name }
-            : program
-        )
-      );
+      await db
+        .update(programs)
+        .set({ host: newHost.name })
+        .where(eq(programs.host, oldName));
 
       const allBlocks = await readAllScheduleBlocks();
       const renamed = allBlocks.map((block) => ({
@@ -87,8 +81,7 @@ export function hostRoutes(server: FastifyInstance) {
     "/:name",
     async (request, reply) => {
       const name = decodeURIComponent(request.params.name);
-      const hosts = await readHosts();
-      await writeHosts(hosts.filter((host) => host.name !== name));
+      await db.delete(hosts).where(eq(hosts.name, name));
       return reply.status(204).send();
     }
   );

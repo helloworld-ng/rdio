@@ -1,18 +1,17 @@
 import { randomUUID } from "node:crypto";
+import { db, programs } from "@rdio/db";
+import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import {
   isRecord,
-  type Program,
   parseJsonBody,
   readAllScheduleBlocks,
-  readPrograms,
   scheduleVersion,
   writeAllScheduleBlocks,
-  writePrograms,
 } from "../lib/station-store.js";
 
 export function programRoutes(server: FastifyInstance) {
-  server.get("/", async () => ({ programs: await readPrograms() }));
+  server.get("/", async () => ({ programs: await db.select().from(programs) }));
 
   server.post("/", async (request, reply) => {
     const body = parseJsonBody(request.body);
@@ -26,14 +25,13 @@ export function programRoutes(server: FastifyInstance) {
         .status(400)
         .send({ error: "title, description, and host are required" });
     }
-    const program: Program = {
+    const program = {
       id: randomUUID(),
       title: body.title,
       description: body.description,
       host: body.host,
     };
-    const programs = await readPrograms();
-    await writePrograms([...programs, program]);
+    await db.insert(programs).values(program);
     return reply.status(201).send({ program });
   });
 
@@ -50,19 +48,20 @@ export function programRoutes(server: FastifyInstance) {
         .status(400)
         .send({ error: "title, description, and host are required" });
     }
-    const programs = await readPrograms();
-    const index = programs.findIndex((program) => program.id === id);
-    if (index === -1) {
+    const existing = await db
+      .select()
+      .from(programs)
+      .where(eq(programs.id, id));
+    if (existing.length === 0) {
       return reply.status(404).send({ error: "Program not found" });
     }
-    const program: Program = {
+    const program = {
       id,
       title: body.title,
       description: body.description,
       host: body.host,
     };
-    programs[index] = program;
-    await writePrograms(programs);
+    await db.update(programs).set(program).where(eq(programs.id, id));
     const blocks = await readAllScheduleBlocks();
     const updatedBlocks = blocks.map((block) =>
       block.programId === id
@@ -80,8 +79,7 @@ export function programRoutes(server: FastifyInstance) {
 
   server.delete<{ Params: { id: string } }>("/:id", async (request) => {
     const { id } = request.params;
-    const programs = await readPrograms();
-    await writePrograms(programs.filter((program) => program.id !== id));
+    await db.delete(programs).where(eq(programs.id, id));
     const blocks = await readAllScheduleBlocks();
     const updatedBlocks = blocks.map((block) =>
       block.programId === id ? { ...block, programId: undefined } : block

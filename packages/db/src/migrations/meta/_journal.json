@@ -15,6 +15,13 @@
       "when": 1780421790992,
       "tag": "0001_needy_liz_osborn",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780492466013,
+      "tag": "0002_elite_whizzer",
+      "breakpoints": true
     }
   ]
 }

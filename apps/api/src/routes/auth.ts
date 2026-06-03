@@ -10,7 +10,6 @@ import { requestSession } from "../lib/auth.js";
 import { isRecord, parseJsonBody } from "../lib/station-store.js";
 
 export function authRoutes(server: FastifyInstance) {
-
   server.route({
     method: ["GET", "POST"],
     url: "/api/auth/*",
