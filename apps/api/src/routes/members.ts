@@ -1,7 +1,12 @@
 import { auth, authHeaders } from "@rdio/auth/server";
 import type { FastifyInstance } from "fastify";
 import { requireAdminSession } from "../lib/auth.js";
-import { isRecord, parseJsonBody } from "../lib/station-store.js";
+import { validateJsonBody, validateParams } from "../lib/validation.js";
+import {
+  createMemberBodySchema,
+  idParamsSchema,
+  updateMemberRoleBodySchema,
+} from "../schemas/api.js";
 
 export function memberRoutes(server: FastifyInstance) {
   server.get("/", async (request, reply) => {
@@ -24,22 +29,15 @@ export function memberRoutes(server: FastifyInstance) {
       return;
     }
 
-    const body = parseJsonBody(request.body);
-    if (
-      !isRecord(body) ||
-      typeof body.name !== "string" ||
-      typeof body.email !== "string" ||
-      typeof body.password !== "string"
-    ) {
-      return reply
-        .status(400)
-        .send({ error: "name, email, and password are required" });
+    const body = validateJsonBody(reply, createMemberBodySchema, request.body);
+    if (!body) {
+      return;
     }
 
     const member = await auth.api.createUser({
       body: {
-        name: body.name.trim(),
-        email: body.email.trim(),
+        name: body.name,
+        email: body.email,
         password: body.password,
         role: "user",
         data: {
@@ -56,8 +54,13 @@ export function memberRoutes(server: FastifyInstance) {
       return;
     }
 
+    const params = validateParams(reply, idParamsSchema, request.params);
+    if (!params) {
+      return;
+    }
+
     await auth.api.removeUser({
-      body: { userId: request.params.id },
+      body: { userId: params.id },
       headers: authHeaders(request.headers),
     });
 
@@ -69,13 +72,18 @@ export function memberRoutes(server: FastifyInstance) {
       return;
     }
 
-    const body = parseJsonBody(request.body);
-    if (!isRecord(body) || typeof body.role !== "string") {
-      return reply.status(400).send({ error: "role is required" });
+    const params = validateParams(reply, idParamsSchema, request.params);
+    const body = validateJsonBody(
+      reply,
+      updateMemberRoleBodySchema,
+      request.body
+    );
+    if (!(params && body)) {
+      return;
     }
 
     const updated = await auth.api.setRole({
-      body: { userId: request.params.id, role: body.role },
+      body: { userId: params.id, role: body.role },
       headers: authHeaders(request.headers),
     });
 

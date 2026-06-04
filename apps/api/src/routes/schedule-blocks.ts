@@ -1,17 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import {
   detectBlockConflicts,
-  isRecord,
-  normalizeScheduleBlocks,
-  parseJsonBody,
   readAllScheduleBlocks,
   readScheduleBlocksForDay,
   refreshCurrentPlayout,
   scheduleVersion,
   writeAllScheduleBlocks,
 } from "../lib/station-store.js";
-
-const dayParamPattern = /^\d{4}-\d{2}-\d{2}$/;
+import { validateJsonBody, validateParams } from "../lib/validation.js";
+import { dayParamsSchema, scheduleBlocksBodySchema } from "../schemas/api.js";
 
 export function scheduleBlockRoutes(server: FastifyInstance) {
   server.get("/", async () => ({
@@ -20,12 +17,12 @@ export function scheduleBlockRoutes(server: FastifyInstance) {
   }));
 
   server.get<{ Params: { day: string } }>("/:day", async (request, reply) => {
-    const { day } = request.params;
-    if (!dayParamPattern.test(day)) {
-      return reply
-        .status(400)
-        .send({ error: "day must be in YYYY-MM-DD format" });
+    const params = validateParams(reply, dayParamsSchema, request.params);
+    if (!params) {
+      return;
     }
+
+    const { day } = params;
     return {
       day,
       blocks: await readScheduleBlocksForDay(day),
@@ -34,12 +31,16 @@ export function scheduleBlockRoutes(server: FastifyInstance) {
   });
 
   server.put("/", async (request, reply) => {
-    const body = parseJsonBody(request.body);
-    const blocks = normalizeScheduleBlocks(body);
-    const expectedVersion =
-      isRecord(body) && typeof body.version === "string"
-        ? body.version
-        : undefined;
+    const body = validateJsonBody(
+      reply,
+      scheduleBlocksBodySchema,
+      request.body
+    );
+    if (!body) {
+      return;
+    }
+
+    const { blocks, version: expectedVersion } = body;
     const currentVersion = await scheduleVersion();
     const conflicts = detectBlockConflicts(blocks);
 

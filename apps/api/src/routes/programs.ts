@@ -3,28 +3,22 @@ import { db, programs } from "@rdio/db";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import {
-  isRecord,
-  parseJsonBody,
   readAllScheduleBlocks,
   scheduleVersion,
   writeAllScheduleBlocks,
 } from "../lib/station-store.js";
+import { validateJsonBody, validateParams } from "../lib/validation.js";
+import { idParamsSchema, programBodySchema } from "../schemas/api.js";
 
 export function programRoutes(server: FastifyInstance) {
   server.get("/", async () => ({ programs: await db.select().from(programs) }));
 
   server.post("/", async (request, reply) => {
-    const body = parseJsonBody(request.body);
-    if (
-      !isRecord(body) ||
-      typeof body.title !== "string" ||
-      typeof body.description !== "string" ||
-      typeof body.host !== "string"
-    ) {
-      return reply
-        .status(400)
-        .send({ error: "title, description, and host are required" });
+    const body = validateJsonBody(reply, programBodySchema, request.body);
+    if (!body) {
+      return;
     }
+
     const program = {
       id: randomUUID(),
       title: body.title,
@@ -36,18 +30,13 @@ export function programRoutes(server: FastifyInstance) {
   });
 
   server.put<{ Params: { id: string } }>("/:id", async (request, reply) => {
-    const { id } = request.params;
-    const body = parseJsonBody(request.body);
-    if (
-      !isRecord(body) ||
-      typeof body.title !== "string" ||
-      typeof body.description !== "string" ||
-      typeof body.host !== "string"
-    ) {
-      return reply
-        .status(400)
-        .send({ error: "title, description, and host are required" });
+    const params = validateParams(reply, idParamsSchema, request.params);
+    const body = validateJsonBody(reply, programBodySchema, request.body);
+    if (!(params && body)) {
+      return;
     }
+
+    const { id } = params;
     const existing = await db
       .select()
       .from(programs)
@@ -77,8 +66,13 @@ export function programRoutes(server: FastifyInstance) {
     return { program, blocks: updatedBlocks, version: await scheduleVersion() };
   });
 
-  server.delete<{ Params: { id: string } }>("/:id", async (request) => {
-    const { id } = request.params;
+  server.delete<{ Params: { id: string } }>("/:id", async (request, reply) => {
+    const params = validateParams(reply, idParamsSchema, request.params);
+    if (!params) {
+      return;
+    }
+
+    const { id } = params;
     await db.delete(programs).where(eq(programs.id, id));
     const blocks = await readAllScheduleBlocks();
     const updatedBlocks = blocks.map((block) =>

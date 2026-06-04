@@ -13,6 +13,17 @@ import {
   uploadDirectory,
   writeAllScheduleBlocks,
 } from "../lib/station-store.js";
+import {
+  validateHeaders,
+  validateParams,
+  validateValue,
+} from "../lib/validation.js";
+import {
+  firstHeaderValue,
+  mediaParamsSchema,
+  mediaUploadBodySchema,
+  mediaUploadHeadersSchema,
+} from "../schemas/api.js";
 
 export function mediaRoutes(server: FastifyInstance) {
   server.get("/", async () => ({
@@ -20,19 +31,26 @@ export function mediaRoutes(server: FastifyInstance) {
   }));
 
   server.post("/", async (request, reply) => {
-    const body = request.body;
-
-    if (!Buffer.isBuffer(body) || body.length === 0) {
-      return reply
-        .status(400)
-        .send({ error: "Expected a non-empty file body." });
+    const body = validateValue(
+      reply,
+      mediaUploadBodySchema,
+      request.body,
+      "Invalid request body"
+    );
+    const headers = validateHeaders(
+      reply,
+      mediaUploadHeadersSchema,
+      request.headers
+    );
+    if (!(body && headers)) {
+      return;
     }
 
-    const rawFileName = request.headers["x-file-name"];
+    const rawFileName = headers["x-file-name"];
     const originalName = sanitizeFileName(
-      Array.isArray(rawFileName) ? rawFileName[0] : (rawFileName ?? "upload")
+      firstHeaderValue(rawFileName) ?? "upload"
     );
-    const contentType = request.headers["content-type"];
+    const contentType = firstHeaderValue(headers["content-type"]);
     const fileName = storedFileNameFor(originalName);
 
     await mkdir(uploadDirectory, { recursive: true });
@@ -42,7 +60,7 @@ export function mediaRoutes(server: FastifyInstance) {
       fileName,
       body.length,
       new Date(),
-      Array.isArray(contentType) ? contentType[0] : contentType
+      contentType
     );
 
     return reply.status(201).send({ media });
@@ -50,8 +68,13 @@ export function mediaRoutes(server: FastifyInstance) {
 
   server.delete<{ Params: { mediaId: string } }>(
     "/:mediaId",
-    async (request) => {
-      const safeMediaId = path.basename(request.params.mediaId);
+    async (request, reply) => {
+      const params = validateParams(reply, mediaParamsSchema, request.params);
+      if (!params) {
+        return;
+      }
+
+      const safeMediaId = path.basename(params.mediaId);
       const blocks = await readAllScheduleBlocks();
       const updatedBlocks = blocks.map((block) =>
         block.mediaId === safeMediaId
@@ -69,7 +92,12 @@ export function mediaRoutes(server: FastifyInstance) {
   server.get<{ Params: { mediaId: string } }>(
     "/:mediaId",
     async (request, reply) => {
-      const safeMediaId = path.basename(request.params.mediaId);
+      const params = validateParams(reply, mediaParamsSchema, request.params);
+      if (!params) {
+        return;
+      }
+
+      const safeMediaId = path.basename(params.mediaId);
       const filePath = path.join(uploadDirectory, safeMediaId);
       const stats = await stat(filePath);
       const media = mediaItemFromFile(
