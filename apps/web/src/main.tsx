@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { AuthProvider } from "@/providers/auth-provider";
 import { QueryProvider } from "@/providers/query-provider";
 import { router } from "@/router";
+import "@/styles/globals.css";
 
 const rootElement = document.getElementById("root");
 

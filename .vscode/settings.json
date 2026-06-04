@@ -1,10 +1,32 @@
 {
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.defaultFormatter": "biomejs.biome",
   "editor.formatOnPaste": true,
   "editor.formatOnSave": true,
   "emmet.showExpandedAbbreviation": "never",
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
   "js/ts.tsdk.path": "node_modules/typescript/lib",
   "js/ts.tsdk.promptToUseWorkspaceVersion": true,
+  "tailwindCSS.classFunctions": ["cn", "clsx"],
+  "tailwindCSS.experimental.classRegex": [
+    [
+      "(?:export\\s+)?const\\s+[A-Za-z0-9_$]+\\s*=\\s*([\\s\\S]*?);",
+      "[\"'`]([^\"'`]*)[\"'`]"
+    ],
+    "return\\s+[\"'`]([^\"'`]*)[\"'`]"
+  ],
+  "tailwindCSS.experimental.configFile": {
+    "./apps/web/src/styles/globals.css": ["./apps/web/src/**"],
+    "./packages/ui/src/styles/globals.css": [
+      "./packages/ui/src/**",
+      "./apps/web/src/**"
+    ]
+  },
+  "tailwindCSS.includeLanguages": {
+    "astro": "html"
+  },
+  "typescript.tsdk": "node_modules/typescript/lib",
   "[css]": {
     "editor.defaultFormatter": "biomejs.biome"
   },

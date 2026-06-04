@@ -60,6 +60,16 @@ font-family: "Google Sans", "Product Sans", "Helvetica Neue", Arial, ui-sans-ser
 - The player bar should stay dark, atmospheric, and readable, with simple white transport controls.
 - Player icons come from the shared icon set and inherit `currentColor`; set player foreground through theme tokens rather than per-icon colors.
 
+## Button Variants
+
+Shared buttons keep the default shadcn variants and add Rdio-specific variants for the app skin:
+
+- `rdio-primary`: cyan-blue tactile calls to action, such as saving or creating records.
+- `rdio-destructive`: red tactile destructive actions, such as confirming deletion.
+- `rdio-chrome`: pale chrome actions used for secondary controls, toolbar actions, and cancel buttons.
+
+Use the `rdio-*` variants when a button should match the early-2010s Rdio-inspired chrome. Keep the unprefixed shadcn variants for generic or unskinned UI primitives.
+
 ## Sources
 
 - Bryan Clark, "Rdio, You'll Be Missed.", Medium, November 24, 2015: https://medium.com/@bryanjclark/rdio-you-ll-be-missed-4322d2e7fbc4

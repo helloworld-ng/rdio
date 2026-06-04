@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Settings, Trash2, Users } from "lucide-react";
 import { useState } from "react";
-import { type HostColorId, hostPalette } from "@/components/HostAvatar";
 import { HostColorPicker } from "@/components/HostColorPill";
-import { Modal } from "@/components/ui/modal";
+import { HostDialog } from "@/components/hosts/host-dialog";
+import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog";
 import {
   hostsQueryOptions,
   useCreateHost,
@@ -46,50 +46,24 @@ export function HostsPage({
   onUpdateHost,
 }: HostsPageProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingHostName, setEditingHostName] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [colorId, setColorId] = useState<HostColorId | string>(
-    hostPalette[0].id
+  const [editingHost, setEditingHost] = useState<HostRecord | null>(null);
+  const [pendingDeleteHost, setPendingDeleteHost] = useState<HostRecord | null>(
+    null
   );
 
   const closeModal = () => {
     setIsModalOpen(false);
-    setEditingHostName(null);
-    setName("");
-    setColorId(hostPalette[0].id);
+    setEditingHost(null);
   };
 
   const openCreateModal = () => {
-    setEditingHostName(null);
-    setName("");
-    setColorId(hostPalette[0].id);
+    setEditingHost(null);
     setIsModalOpen(true);
   };
 
   const openEditModal = (host: HostRecord) => {
-    setEditingHostName(host.name);
-    setName(host.name);
-    setColorId(host.colorId);
+    setEditingHost(host);
     setIsModalOpen(true);
-  };
-
-  const saveHost = () => {
-    const normalized = name.trim();
-    const isDuplicate = hosts.some(
-      (host) => host.name === normalized && host.name !== editingHostName
-    );
-
-    if (!normalized || isDuplicate) {
-      return;
-    }
-
-    if (editingHostName) {
-      onUpdateHost(editingHostName, { name: normalized, colorId });
-    } else {
-      onAddHost({ name: normalized, colorId });
-    }
-
-    closeModal();
   };
 
   return (
@@ -104,62 +78,40 @@ export function HostsPage({
           New host
         </button>
       </div>
-      {isModalOpen ? (
-        <Modal
-          onClose={closeModal}
-          title={editingHostName ? "Edit host" : "New host"}
-        >
-          <form
-            className="host-create-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              saveHost();
-            }}
-          >
-            <label>
-              <span>Host name</span>
-              <input
-                onChange={(event) => setName(event.target.value)}
-                placeholder="e.g. Maya Stone"
-                value={name}
-              />
-            </label>
-            <fieldset className="host-color-field">
-              <legend>Color</legend>
-              <div className="host-color-options">
-                {hostPalette.map((color) => (
-                  <label
-                    className={colorId === color.id ? "is-selected" : ""}
-                    key={color.id}
-                    title={color.label}
-                  >
-                    <input
-                      checked={colorId === color.id}
-                      name="host-color"
-                      onChange={() => setColorId(color.id)}
-                      type="radio"
-                      value={color.id}
-                    />
-                    <span
-                      style={{
-                        background: color.background,
-                        color: color.foreground,
-                      }}
-                    >
-                      {color.label}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-            <div className="form-actions">
-              <button className="primary-action" type="submit">
-                {editingHostName ? "Update host" : "Add host"}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      ) : null}
+      <HostDialog
+        host={editingHost}
+        hosts={hosts}
+        onOpenChange={(open) => {
+          if (open) {
+            setIsModalOpen(true);
+            return;
+          }
+
+          closeModal();
+        }}
+        onSubmit={(host) =>
+          editingHost ? onUpdateHost(editingHost.name, host) : onAddHost(host)
+        }
+        open={isModalOpen}
+      />
+      <DeleteConfirmationDialog
+        confirmLabel="Delete host"
+        entityName={pendingDeleteHost?.name}
+        onConfirm={async () => {
+          if (!pendingDeleteHost) {
+            return;
+          }
+
+          await onRemoveHost(pendingDeleteHost.name);
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDeleteHost(null);
+          }
+        }}
+        open={Boolean(pendingDeleteHost)}
+        title="Delete host?"
+      />
       <div className="library-list">
         {hosts.length === 0 ? (
           <p className="library-empty">No hosts yet</p>
@@ -190,7 +142,7 @@ export function HostsPage({
               </button>
               <button
                 aria-label={`Remove ${host.name}`}
-                onClick={() => onRemoveHost(host.name)}
+                onClick={() => setPendingDeleteHost(host)}
                 type="button"
               >
                 <Trash2 aria-hidden="true" size={14} strokeWidth={1.8} />
