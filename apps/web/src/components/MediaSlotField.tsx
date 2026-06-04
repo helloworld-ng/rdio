@@ -3,9 +3,8 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef } from "react";
 import { MediaPreviewThumb } from "@/components/MediaPreviewThumb";
 import { MediaSearchSelect } from "@/components/MediaSearchSelect";
+import { API_BASE_URL } from "@/lib/constants";
 import { formatFileSize } from "@/utils";
-
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
 
 interface MediaLibraryItem {
   id: string;
@@ -80,7 +79,7 @@ export function MediaSlotField({
   if (selectedItem) {
     selectionPreview = (
       <MediaPreviewThumb
-        apiBaseUrl={apiBaseUrl}
+        apiBaseUrl={API_BASE_URL}
         name={selectedItem.name}
         type={selectedItem.type}
         url={selectedItem.url}

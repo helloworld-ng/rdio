@@ -1,12 +1,18 @@
-import { useCurrentStation } from "@/app";
+import { useQuery } from "@tanstack/react-query";
 import { SettingsLink, SettingsRow } from "@/components/ui/settings-list";
-import { apiBaseUrl } from "@/lib/api";
+import { StationLoading } from "@/components/ui/station-loading";
+import { API_BASE_URL } from "@/lib/constants";
+import { stationQueryOptions } from "@/lib/queries/station";
 import type { StationSummary } from "@/types/station";
 
 export function SettingsPage() {
-  const station = useCurrentStation();
+  const stationQuery = useQuery(stationQueryOptions());
 
-  return <StationSettings station={station} />;
+  if (!stationQuery.data) {
+    return <StationLoading failed={stationQuery.isError} />;
+  }
+
+  return <StationSettings station={stationQuery.data} />;
 }
 
 export function StationSettings({ station }: { station: StationSummary }) {
@@ -26,7 +32,7 @@ export function StationSettings({ station }: { station: StationSummary }) {
           value={station.fallbackSource.kind}
         />
         <SettingsRow label="Fallback source" value={fallbackDetail} />
-        <SettingsLink href={apiBaseUrl} label="API" />
+        <SettingsLink href={API_BASE_URL} label="API" />
         <SettingsLink
           href={`http://${station.icecast.host}:${station.icecast.port}`}
           label="Icecast"

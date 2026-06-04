@@ -1,6 +1,7 @@
 import { RouterProvider } from "@tanstack/react-router";
 import { createRoot } from "react-dom/client";
 import { AuthProvider } from "@/providers/auth-provider";
+import { QueryProvider } from "@/providers/query-provider";
 import { router } from "@/router";
 
 const rootElement = document.getElementById("root");
@@ -18,7 +19,9 @@ const root = existingRoot ?? createRoot(rootElement);
 )._reactRoot = root;
 
 root.render(
-  <AuthProvider>
-    <RouterProvider router={router} />
-  </AuthProvider>
+  <QueryProvider>
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
+  </QueryProvider>
 );

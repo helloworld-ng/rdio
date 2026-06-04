@@ -2,7 +2,7 @@ import { createFileRoute, Navigate } from "@tanstack/react-router";
 import {
   AuthLoadingPage,
   ChangePasswordPage,
-} from "@/components/auth/auth-pages";
+} from "@/components/pages/auth-pages";
 import { useAuth } from "@/providers/auth-provider";
 
 export const Route = createFileRoute("/_auth/change-password")({

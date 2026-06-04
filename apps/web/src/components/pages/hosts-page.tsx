@@ -1,9 +1,15 @@
+import { useQuery } from "@tanstack/react-query";
 import { Plus, Settings, Trash2, Users } from "lucide-react";
 import { useState } from "react";
-import { useAppLayout } from "@/app";
 import { type HostColorId, hostPalette } from "@/components/HostAvatar";
 import { HostColorPicker } from "@/components/HostColorPill";
 import { Modal } from "@/components/ui/modal";
+import {
+  hostsQueryOptions,
+  useCreateHost,
+  useDeleteHost,
+  useUpdateHost,
+} from "@/lib/queries/hosts";
 import type { HostRecord } from "@/types/host";
 
 interface HostsPageProps {
@@ -14,9 +20,23 @@ interface HostsPageProps {
 }
 
 export function HostsRoutePage() {
-  const { hostsPage } = useAppLayout();
+  const hostsQuery = useQuery(hostsQueryOptions());
+  const createHostMutation = useCreateHost();
+  const updateHostMutation = useUpdateHost();
+  const deleteHostMutation = useDeleteHost();
 
-  return <HostsPage {...hostsPage} />;
+  return (
+    <HostsPage
+      hosts={hostsQuery.data ?? []}
+      onAddHost={(host) =>
+        createHostMutation.mutateAsync(host).then(() => undefined)
+      }
+      onRemoveHost={(hostName) => deleteHostMutation.mutateAsync(hostName)}
+      onUpdateHost={(hostName, host) =>
+        updateHostMutation.mutateAsync({ host, hostName }).then(() => undefined)
+      }
+    />
+  );
 }
 
 export function HostsPage({

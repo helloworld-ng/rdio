@@ -1,6 +1,6 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
-import { AppLayout } from "@/app";
-import { AuthLoadingPage } from "@/components/auth/auth-pages";
+import { AppLayout } from "@/components/layout/app-layout";
+import { AuthLoadingPage } from "@/components/pages/auth-pages";
 import { useAuth } from "@/providers/auth-provider";
 
 export const Route = createFileRoute("/_app")({

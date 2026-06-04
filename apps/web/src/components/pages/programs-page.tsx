@@ -1,12 +1,19 @@
+import { useQuery } from "@tanstack/react-query";
 import { BookOpen, Plus, Settings, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useAppLayout } from "@/app";
 import { HostAvatar } from "@/components/HostAvatar";
 import { MultiSelect } from "@/components/MultiSelect";
 import { Modal } from "@/components/ui/modal";
+import { hostsQueryOptions, useCreateHost } from "@/lib/queries/hosts";
+import {
+  programsQueryOptions,
+  useCreateProgram,
+  useDeleteProgram,
+  useUpdateProgram,
+} from "@/lib/queries/programs";
 import type { HostRecord } from "@/types/host";
 import type { Program } from "@/types/station";
-import { findHost, getHostNames } from "@/utils/hosts";
+import { addHostByName, findHost, getHostNames } from "@/utils/hosts";
 
 interface ProgramsPageProps {
   hosts: HostRecord[];
@@ -21,9 +28,40 @@ interface ProgramsPageProps {
 }
 
 export function ProgramsPage() {
-  const { programsPage } = useAppLayout();
+  const hostsQuery = useQuery(hostsQueryOptions());
+  const programsQuery = useQuery(programsQueryOptions());
+  const createHostMutation = useCreateHost();
+  const createProgramMutation = useCreateProgram();
+  const updateProgramMutation = useUpdateProgram();
+  const deleteProgramMutation = useDeleteProgram();
+  const hosts = hostsQuery.data ?? [];
+  const createHostByName = async (hostName: string) => {
+    const host = addHostByName(hosts, hostName).at(hosts.length);
+    if (!host) {
+      return;
+    }
 
-  return <ProgramsView {...programsPage} />;
+    await createHostMutation.mutateAsync(host);
+  };
+
+  return (
+    <ProgramsView
+      hosts={hosts}
+      onAddHost={createHostByName}
+      onCreateProgram={(program) =>
+        createProgramMutation.mutateAsync(program).then(() => undefined)
+      }
+      onDeleteProgram={(programId) =>
+        deleteProgramMutation.mutateAsync(programId).then(() => undefined)
+      }
+      onUpdateProgram={(programId, program) =>
+        updateProgramMutation
+          .mutateAsync({ program, programId })
+          .then(() => undefined)
+      }
+      programs={programsQuery.data ?? []}
+    />
+  );
 }
 
 function ProgramsView({

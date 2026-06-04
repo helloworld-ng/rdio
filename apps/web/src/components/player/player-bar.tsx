@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import {
   ChevronDown,
   ChevronUp,
@@ -7,7 +8,16 @@ import {
   Play,
   Share2,
 } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { programsQueryOptions } from "@/lib/queries/programs";
+import { scheduleBlocksQueryOptions } from "@/lib/queries/schedule-blocks";
+import { stationQueryOptions } from "@/lib/queries/station";
+import { programTitleForBlock } from "@/utils/schedule";
+import {
+  defaultTimeZone,
+  formatDateKeyInTimeZone,
+  getNowMinutes,
+} from "@/utils/time";
 
 interface PlayerBarProps {
   channelName: string;
@@ -75,7 +85,53 @@ function freshStreamUrl(streamUrl: string) {
   return `${streamUrl}${separator}_=${Date.now()}`;
 }
 
-export function PlayerBar({
+export function PlayerBar() {
+  const stationQuery = useQuery(stationQueryOptions());
+  const programsQuery = useQuery(programsQueryOptions());
+  const scheduleBlocksQuery = useQuery(scheduleBlocksQueryOptions());
+  const [, setNowTick] = useState(0);
+
+  useEffect(() => {
+    const interval = window.setInterval(
+      () => setNowTick((tick) => tick + 1),
+      60_000
+    );
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const station = stationQuery.data;
+  const programs = programsQuery.data ?? [];
+  const blocks = scheduleBlocksQuery.data?.blocks ?? [];
+  const stationTimeZone = station?.timezone ?? defaultTimeZone;
+  const todayDateKey = formatDateKeyInTimeZone(new Date(), stationTimeZone);
+  const todayBlocks = useMemo(
+    () =>
+      blocks
+        .filter((block) => block.dateKey === todayDateKey)
+        .sort((a, b) => a.startMinutes - b.startMinutes),
+    [blocks, todayDateKey]
+  );
+  const currentOnAirBlock = useMemo(() => {
+    const nowMinutes = getNowMinutes(new Date(), stationTimeZone);
+
+    return todayBlocks.find(
+      (block) =>
+        block.startMinutes <= nowMinutes && block.endMinutes > nowMinutes
+    );
+  }, [stationTimeZone, todayBlocks]);
+
+  return (
+    <PlayerBarView
+      channelName={station?.name ?? "16 Radio"}
+      programKind={currentOnAirBlock?.kind ?? "broadcast"}
+      programName={programTitleForBlock(currentOnAirBlock, programs) ?? ""}
+      streamUrl={station?.streamUrl ?? ""}
+    />
+  );
+}
+
+function PlayerBarView({
   channelName,
   programKind,
   programName,

@@ -22,10 +22,6 @@ export interface StationSummary {
   timezone: string;
 }
 
-export interface StationResponse {
-  station: StationSummary;
-}
-
 export interface UploadedFileSummary {
   duration?: number;
   name: string;
@@ -39,10 +35,6 @@ export interface MediaItem {
   type: "audio" | "image";
   uploadedAt: string;
   url: string;
-}
-
-export interface MediaResponse {
-  media: MediaItem[];
 }
 
 export interface Program {
@@ -64,16 +56,6 @@ export interface ScheduleBlock {
   programId?: string;
   startMinutes: number;
   title: string;
-}
-
-export interface ScheduleBlocksResponse {
-  blocks: ScheduleBlock[];
-  version: string;
-}
-
-export interface ScheduleMutationResponse {
-  blocks?: ScheduleBlock[];
-  version?: string;
 }
 
 export type ScheduleBlockDraft = Omit<ScheduleBlock, "id" | "dateKey">;

@@ -1,12 +1,8 @@
-import {
-  createContext,
-  type PropsWithChildren,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
-import { apiBaseUrl, apiFetch } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { createContext, type PropsWithChildren, useContext } from "react";
+import { apiFetch } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
+import { queryKeys } from "@/lib/query-keys";
 
 export interface AuthUser {
   email: string;
@@ -52,40 +48,31 @@ export function useAuthenticatedUser() {
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const session = authClient.useSession();
-  const [setupRequired, setSetupRequired] = useState<boolean | null>(null);
+  const setupStatus = useQuery({
+    enabled: !session.data,
+    queryKey: queryKeys.auth.setupStatus.queryKey,
+    queryFn: async () => {
+      const response = await apiFetch("/auth/setup-status");
 
-  useEffect(() => {
-    if (session.data) {
-      return;
-    }
+      if (!response.ok) {
+        throw new Error("Could not check setup status");
+      }
 
-    let cancelled = false;
-    apiFetch(`${apiBaseUrl}/auth/setup-status`)
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error("Could not check setup status");
-        }
-
-        const data = (await response.json()) as { setupRequired: boolean };
-        if (!cancelled) {
-          setSetupRequired(data.setupRequired);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSetupRequired(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [session.data]);
+      return (await response.json()) as { setupRequired: boolean };
+    },
+    retry: false,
+  });
 
   const user = session.data ? (session.data.user as AuthUser) : null;
+  const setupRequired = setupStatus.isError
+    ? false
+    : (setupStatus.data?.setupRequired ?? null);
   let status: AuthStatus = "anonymous";
 
-  if (session.isPending || (!user && setupRequired === null)) {
+  if (
+    session.isPending ||
+    (!user && (setupStatus.isPending || setupRequired === null))
+  ) {
     status = "loading";
   } else if (user?.mustChangePassword) {
     status = "password-change-required";
