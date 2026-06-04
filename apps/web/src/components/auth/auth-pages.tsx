@@ -1,107 +1,33 @@
 import {
-  createContext,
   type FormEvent,
   type InputHTMLAttributes,
   type PropsWithChildren,
-  useContext,
-  useEffect,
   useRef,
   useState,
 } from "react";
-import { apiBaseUrl, apiFetch } from "../lib/api";
-import { authClient } from "../lib/auth-client";
+import { apiBaseUrl, apiFetch } from "@/lib/api";
+import { authClient } from "@/lib/auth-client";
+import { useAuth } from "@/providers/auth-provider";
 
-interface AuthUser {
-  email: string;
-  id: string;
-  mustChangePassword: boolean;
-  name: string;
-  role?: string | null;
-}
-
-interface AuthContextValue {
-  logout: () => Promise<void>;
-  user: AuthUser;
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null);
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used inside AuthGate");
-  }
-
-  return context;
-}
-
-export function AuthGate({ children }: PropsWithChildren) {
-  const session = authClient.useSession();
-  const [setupRequired, setSetupRequired] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    if (session.data) {
-      return;
-    }
-
-    let cancelled = false;
-    apiFetch(`${apiBaseUrl}/auth/setup-status`)
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error("Could not check setup status");
-        }
-
-        const data = (await response.json()) as { setupRequired: boolean };
-        if (!cancelled) {
-          setSetupRequired(data.setupRequired);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSetupRequired(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [session.data]);
-
-  if (session.isPending || (!session.data && setupRequired === null)) {
-    return (
-      <AuthPage
-        description="Checking your session..."
-        title="Loading station"
-      />
-    );
-  }
-
-  if (!session.data) {
-    return setupRequired ? (
-      <SetupForm onComplete={() => session.refetch()} />
-    ) : (
-      <LoginForm onComplete={() => session.refetch()} />
-    );
-  }
-
-  const user = session.data.user as AuthUser;
-  if (user.mustChangePassword) {
-    return <ChangePasswordForm onComplete={() => session.refetch()} />;
-  }
-
+export function AuthLoadingPage() {
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        logout: async () => {
-          await authClient.signOut();
-          await session.refetch();
-        },
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+    <AuthPage description="Checking your session..." title="Loading station" />
   );
+}
+
+export function SetupPage() {
+  const { refreshSession } = useAuth();
+  return <SetupForm onComplete={refreshSession} />;
+}
+
+export function LoginPage() {
+  const { refreshSession } = useAuth();
+  return <LoginForm onComplete={refreshSession} />;
+}
+
+export function ChangePasswordPage() {
+  const { refreshSession } = useAuth();
+  return <ChangePasswordForm onComplete={refreshSession} />;
 }
 
 function AuthPage({
@@ -342,8 +268,8 @@ function PasswordInput(
   const inputRef = useRef<HTMLInputElement>(null);
 
   function toggle() {
-    setVisible((v) => !v);
-    // keep focus on input after toggling
+    setVisible((value) => !value);
+    // Keep focus on input after toggling password visibility.
     requestAnimationFrame(() => inputRef.current?.focus());
   }
 

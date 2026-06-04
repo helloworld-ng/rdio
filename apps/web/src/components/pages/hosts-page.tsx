@@ -1,18 +1,22 @@
-import { Plus, Settings, Trash2, Users, X } from "lucide-react";
+import { Plus, Settings, Trash2, Users } from "lucide-react";
 import { useState } from "react";
-import { type HostColorId, hostPalette } from "./HostAvatar";
-import { HostColorPicker } from "./HostColorPill";
-
-export interface HostRecord {
-  colorId: HostColorId | string;
-  name: string;
-}
+import { useAppLayout } from "@/app";
+import { type HostColorId, hostPalette } from "@/components/HostAvatar";
+import { HostColorPicker } from "@/components/HostColorPill";
+import { Modal } from "@/components/ui/modal";
+import type { HostRecord } from "@/types/host";
 
 interface HostsPageProps {
   hosts: HostRecord[];
-  onAddHost: (host: HostRecord) => void;
-  onRemoveHost: (host: string) => void;
-  onUpdateHost: (hostName: string, host: HostRecord) => void;
+  onAddHost: (host: HostRecord) => Promise<void>;
+  onRemoveHost: (host: string) => Promise<void>;
+  onUpdateHost: (hostName: string, host: HostRecord) => Promise<void>;
+}
+
+export function HostsRoutePage() {
+  const { hostsPage } = useAppLayout();
+
+  return <HostsPage {...hostsPage} />;
 }
 
 export function HostsPage({
@@ -81,80 +85,60 @@ export function HostsPage({
         </button>
       </div>
       {isModalOpen ? (
-        <div className="modal-backdrop">
-          <button
-            aria-label="Close host dialog"
-            className="modal-backdrop-close"
-            onClick={closeModal}
-            type="button"
-          />
-          <section
-            aria-label={editingHostName ? "Edit host" : "New host"}
-            aria-modal="true"
-            className="modal-panel"
-            role="dialog"
+        <Modal
+          onClose={closeModal}
+          title={editingHostName ? "Edit host" : "New host"}
+        >
+          <form
+            className="host-create-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              saveHost();
+            }}
           >
-            <div className="modal-header">
-              <strong>{editingHostName ? "Edit host" : "New host"}</strong>
-              <button
-                aria-label="Close modal"
-                onClick={closeModal}
-                type="button"
-              >
-                <X aria-hidden="true" size={15} strokeWidth={1.8} />
+            <label>
+              <span>Host name</span>
+              <input
+                onChange={(event) => setName(event.target.value)}
+                placeholder="e.g. Maya Stone"
+                value={name}
+              />
+            </label>
+            <fieldset className="host-color-field">
+              <legend>Color</legend>
+              <div className="host-color-options">
+                {hostPalette.map((color) => (
+                  <label
+                    className={colorId === color.id ? "is-selected" : ""}
+                    key={color.id}
+                    title={color.label}
+                  >
+                    <input
+                      checked={colorId === color.id}
+                      name="host-color"
+                      onChange={() => setColorId(color.id)}
+                      type="radio"
+                      value={color.id}
+                    />
+                    <span
+                      style={{
+                        background: color.background,
+                        color: color.foreground,
+                      }}
+                    >
+                      {color.label}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <div className="form-actions">
+              <button className="primary-action" type="submit">
+                {editingHostName ? "Update host" : "Add host"}
               </button>
             </div>
-            <form
-              className="host-create-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                saveHost();
-              }}
-            >
-              <label>
-                <span>Host name</span>
-                <input
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="e.g. Maya Stone"
-                  value={name}
-                />
-              </label>
-              <fieldset className="host-color-field">
-                <legend>Color</legend>
-                <div className="host-color-options">
-                  {hostPalette.map((color) => (
-                    <label
-                      className={colorId === color.id ? "is-selected" : ""}
-                      key={color.id}
-                      title={color.label}
-                    >
-                      <input
-                        checked={colorId === color.id}
-                        name="host-color"
-                        onChange={() => setColorId(color.id)}
-                        type="radio"
-                        value={color.id}
-                      />
-                      <span
-                        style={{
-                          background: color.background,
-                          color: color.foreground,
-                        }}
-                      >
-                        {color.label}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-              <div className="form-actions">
-                <button className="primary-action" type="submit">
-                  {editingHostName ? "Update host" : "Add host"}
-                </button>
-              </div>
-            </form>
-          </section>
-        </div>
+          </form>
+        </Modal>
       ) : null}
       <div className="library-list">
         {hosts.length === 0 ? (

@@ -1,6 +1,10 @@
 {
   "extends": "@rdio/tsconfig/react-app.json",
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
     "noEmit": true,
     "strictNullChecks": true
   },
