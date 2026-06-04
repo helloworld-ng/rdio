@@ -25,7 +25,7 @@ import {
 } from "@rdio/ui/components/popover";
 import { Textarea } from "@rdio/ui/components/textarea";
 import { cn } from "@rdio/ui/lib/utils";
-import { ChevronDown, Plus, X } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import type { Program } from "@/types/station";
 
@@ -38,6 +38,12 @@ interface ProgramDialogProps {
   open: boolean;
   program?: Program | null;
 }
+
+const formControlClassName =
+  "h-10 rounded-[5px] border-[#d6e0e3] bg-white px-[9px] py-[7px] text-[#30363a] text-base hover:border-[#c1d2d8] focus-visible:border-[#a8d8e6] focus-visible:ring-[rgba(21,152,202,0.12)]";
+
+const hostPickerItemClassName =
+  "mb-1.5 min-h-8 rounded-[4px] px-3 py-0 font-semibold text-[#4f5c61] text-base last:mb-0 data-[selected=true]:bg-[#f3fafc] data-[selected=true]:text-[#1598ca] data-[checked=true]:bg-[#eef6f8] data-[checked=true]:text-[#2f6f7f] data-[checked=true]:[&_svg]:text-[#1598ca]";
 
 export function ProgramDialog({
   hostNames,
@@ -137,7 +143,7 @@ export function ProgramDialog({
                   Program
                 </FieldLabel>
                 <Input
-                  className="h-10 rounded-[7px] border-[#d4e0e4] bg-[#f9fbfb] px-[9px] py-[7px] text-[#30363a] text-base hover:border-[#c1d2d8] focus-visible:border-[#a8d8e6] focus-visible:ring-[rgba(21,152,202,0.12)]"
+                  className={formControlClassName}
                   onChange={(event) => setTitle(event.target.value)}
                   value={title}
                 />
@@ -151,7 +157,7 @@ export function ProgramDialog({
                     render={
                       <Button
                         className={cn(
-                          "h-10 w-full justify-between rounded-[7px] border-[#d4e0e4] bg-[#f9fbfb] px-[9px] py-[7px] text-left font-normal text-base hover:border-[#c1d2d8] hover:bg-[#f9fbfb] focus-visible:border-[#a8d8e6] focus-visible:ring-[rgba(21,152,202,0.12)]",
+                          "h-10 w-full justify-between rounded-[5px] border-[#d6e0e3] bg-white px-[9px] py-[7px] text-left font-normal text-base hover:border-[#c1d2d8] hover:bg-white focus-visible:border-[#a8d8e6] focus-visible:ring-[rgba(21,152,202,0.12)]",
                           !host && "text-muted-foreground"
                         )}
                         type="button"
@@ -162,7 +168,7 @@ export function ProgramDialog({
                     <span className="min-w-0 flex-1">
                       {host ? (
                         <Badge
-                          className="h-8 rounded-full border-[#bde6f0] bg-[#edfaff] px-3 text-[#337d90] text-sm"
+                          className="h-7 rounded-full border-[#cfe6ed] bg-[#eef6f8] px-3 text-[#3f6f7b] text-sm"
                           variant="outline"
                         >
                           {host}
@@ -179,15 +185,19 @@ export function ProgramDialog({
                   </PopoverTrigger>
                   <PopoverContent
                     align="start"
-                    className="w-[var(--anchor-width)] min-w-80 max-w-[calc(100vw-2rem)] gap-2 rounded-xl border-[#d7e1e4] p-2"
+                    className="w-[var(--anchor-width)] min-w-80 max-w-[calc(100vw-2rem)] gap-1 rounded-[6px] border-[#d6e0e3] p-1 shadow-[0_12px_28px_rgba(42,61,67,0.12)]"
                   >
-                    <Command className="gap-2 bg-white p-0">
-                      <CommandInput placeholder="Search hosts..." />
-                      <CommandList className="border-[#edf2f3] border-t pt-2">
+                    <Command className="gap-1 rounded-[6px] bg-white p-0 [&_[data-slot=input-group]]:h-10 [&_[data-slot=input-group]]:rounded-[5px] [&_[data-slot=input-group]]:border-[#d6e0e3] [&_[data-slot=input-group]]:bg-white [&_[data-slot=input-group]]:focus-within:border-[#a8d8e6] [&_[data-slot=input-group]]:focus-within:ring-2 [&_[data-slot=input-group]]:focus-within:ring-[rgba(21,152,202,0.12)]">
+                      <CommandInput
+                        className="text-base placeholder:text-[#9aa6aa]"
+                        placeholder="Search hosts..."
+                      />
+                      <CommandList className="border-[#e6edef] border-t pt-1">
                         <CommandEmpty>No hosts found.</CommandEmpty>
-                        <CommandGroup>
+                        <CommandGroup className="grid gap-1.5 p-0">
                           {hostNames.map((hostName) => (
                             <CommandItem
+                              className={hostPickerItemClassName}
                               data-checked={hostName === host}
                               key={hostName}
                               onSelect={() => {
@@ -196,15 +206,15 @@ export function ProgramDialog({
                               }}
                               value={hostName}
                             >
-                              <span>{hostName}</span>
+                              <span className="font-medium">{hostName}</span>
                             </CommandItem>
                           ))}
                         </CommandGroup>
                       </CommandList>
                     </Command>
-                    <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-[#edf2f3] border-t p-2">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-1.5 border-[#e6edef] border-t px-1 py-1.5">
                       <Input
-                        className="h-10 rounded-full border-[#d4e0e4] bg-[#f9fbfb] px-[9px] py-[7px] text-[#30363a] text-base hover:border-[#c1d2d8] focus-visible:border-[#a8d8e6] focus-visible:ring-[rgba(21,152,202,0.12)]"
+                        className={formControlClassName}
                         onChange={(event) => setNewHostName(event.target.value)}
                         onKeyDown={(event) => {
                           if (event.key === "Enter") {
@@ -216,13 +226,12 @@ export function ProgramDialog({
                         value={newHostName}
                       />
                       <Button
-                        className="h-10"
+                        className="h-10 rounded-[5px] px-3 text-base"
                         disabled={!newHostName.trim()}
                         onClick={() => createHost().catch(() => undefined)}
                         type="button"
                         variant="rdio-chrome"
                       >
-                        <Plus data-icon="inline-start" />
                         Add
                       </Button>
                     </div>
@@ -235,7 +244,7 @@ export function ProgramDialog({
                 Description
               </FieldLabel>
               <Textarea
-                className="min-h-[88px] rounded-[7px] border-[#d4e0e4] bg-[#f9fbfb] px-[9px] py-[7px] text-[#30363a] text-base hover:border-[#c1d2d8] focus-visible:border-[#a8d8e6] focus-visible:ring-[rgba(21,152,202,0.12)]"
+                className="min-h-[88px] rounded-[5px] border-[#d6e0e3] bg-white px-[9px] py-[7px] text-[#30363a] text-base hover:border-[#c1d2d8] focus-visible:border-[#a8d8e6] focus-visible:ring-[rgba(21,152,202,0.12)]"
                 onChange={(event) => setDescription(event.target.value)}
                 value={description}
               />

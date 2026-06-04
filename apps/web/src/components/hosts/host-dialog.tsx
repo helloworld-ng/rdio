@@ -24,6 +24,9 @@ interface HostDialogProps {
   open: boolean;
 }
 
+const formControlClassName =
+  "h-10 rounded-[5px] border-[#d6e0e3] bg-white px-[9px] py-[7px] text-[#30363a] text-base hover:border-[#c1d2d8] focus-visible:border-[#a8d8e6] focus-visible:ring-[rgba(21,152,202,0.12)]";
+
 export function HostDialog({
   host,
   hosts,
@@ -107,7 +110,7 @@ export function HostDialog({
                 Host name
               </FieldLabel>
               <Input
-                className="h-10 rounded-[7px] border-[#d4e0e4] bg-[#f9fbfb] px-[9px] py-[7px] text-[#30363a] text-base hover:border-[#c1d2d8] focus-visible:border-[#a8d8e6] focus-visible:ring-[rgba(21,152,202,0.12)]"
+                className={formControlClassName}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="e.g. Maya Stone"
                 value={name}
