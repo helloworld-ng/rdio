@@ -12,6 +12,7 @@
   "dependencies": {
     "@rdio/auth": "workspace:*",
     "@rdio/rdio-core": "workspace:*",
+    "@tanstack/react-router": "^1.170.11",
     "@vitejs/plugin-react": "^4.3.4",
     "lucide-react": "^1.14.0",
     "react": "^19.0.0",
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@rdio/tsconfig": "workspace:*",
+    "@tanstack/router-plugin": "^1.168.14",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "typescript": "^5.7.2"

@@ -1,9 +1,9 @@
 import { RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef } from "react";
-import { formatFileSize } from "../utils";
-import { MediaPreviewThumb } from "./MediaPreviewThumb";
-import { MediaSearchSelect } from "./MediaSearchSelect";
+import { MediaPreviewThumb } from "@/components/MediaPreviewThumb";
+import { MediaSearchSelect } from "@/components/MediaSearchSelect";
+import { formatFileSize } from "@/utils";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
 

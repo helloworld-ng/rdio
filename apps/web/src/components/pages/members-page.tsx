@@ -1,7 +1,9 @@
 import { Settings, Trash2, UserPlus, X } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
-import { apiBaseUrl, apiFetch } from "../lib/api";
-import { useAuth } from "./AuthGate";
+import { useAppLayout, useCurrentStation } from "@/app";
+import { StationSettings } from "@/components/pages/settings-page";
+import { apiBaseUrl, apiFetch } from "@/lib/api";
+import { useAuthenticatedUser } from "@/providers/auth-provider";
 
 interface Member {
   email: string;
@@ -15,8 +17,18 @@ interface MembersResponse {
   users: Member[];
 }
 
+export function MembersRoutePage() {
+  const { canViewMembers } = useAppLayout();
+  const station = useCurrentStation();
+  if (!canViewMembers) {
+    return <StationSettings station={station} />;
+  }
+
+  return <MembersPage />;
+}
+
 export function MembersPage() {
-  const { user: currentUser } = useAuth();
+  const currentUser = useAuthenticatedUser();
   const [members, setMembers] = useState<Member[]>([]);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
