@@ -12,7 +12,7 @@ import {
 } from "@/lib/queries/media";
 import { scheduleBlocksQueryOptions } from "@/lib/queries/schedule-blocks";
 import type { MediaItem } from "@/types/station";
-import { formatFileSize } from "@/utils";
+import { formatFileSize } from "@/utils/media";
 import { formatUploadTime } from "@/utils/time";
 
 interface MediaPageProps {

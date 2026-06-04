@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { MediaPreviewThumb } from "@/components/MediaPreviewThumb";
 import { MediaSearchSelect } from "@/components/MediaSearchSelect";
 import { API_BASE_URL } from "@/lib/constants";
-import { formatFileSize } from "@/utils";
+import { formatFileSize } from "@/utils/media";
 
 interface MediaLibraryItem {
   id: string;
