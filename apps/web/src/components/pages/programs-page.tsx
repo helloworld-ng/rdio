@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, Plus, Settings, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { HostAvatar } from "@/components/HostAvatar";
-import { MultiSelect } from "@/components/MultiSelect";
-import { Modal } from "@/components/ui/modal";
+import { ProgramDialog } from "@/components/programs/program-dialog";
+import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog";
 import { hostsQueryOptions, useCreateHost } from "@/lib/queries/hosts";
 import {
   programsQueryOptions,
@@ -73,70 +73,24 @@ function ProgramsView({
   onDeleteProgram,
 }: ProgramsPageProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProgramId, setEditingProgramId] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const [editingProgram, setEditingProgram] = useState<Program | null>(null);
+  const [pendingDeleteProgram, setPendingDeleteProgram] =
+    useState<Program | null>(null);
   const hostNames = getHostNames(hosts);
-  const [host, setHost] = useState<string[]>(
-    hostNames[0] ? [hostNames[0]] : []
-  );
 
   const openCreateModal = () => {
-    setEditingProgramId(null);
-    setTitle("");
-    setDescription("");
-    setHost(hostNames[0] ? [hostNames[0]] : []);
+    setEditingProgram(null);
     setIsModalOpen(true);
   };
 
   const openEditModal = (program: Program) => {
-    setEditingProgramId(program.id);
-    setTitle(program.title);
-    setDescription(program.description);
-    setHost([program.host]);
+    setEditingProgram(program);
     setIsModalOpen(true);
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
-    setEditingProgramId(null);
-    setTitle("");
-    setDescription("");
-    setHost(hostNames[0] ? [hostNames[0]] : []);
-  };
-
-  useEffect(() => {
-    if (isModalOpen || host.length > 0) {
-      return;
-    }
-
-    if (hostNames[0]) {
-      setHost([hostNames[0]]);
-    }
-  }, [host.length, hostNames, isModalOpen]);
-
-  const saveProgram = () => {
-    const normalizedTitle = title.trim();
-    const normalizedDescription = description.trim();
-    const selectedHost = host[0]?.trim();
-
-    if (!(normalizedTitle && selectedHost)) {
-      return;
-    }
-
-    const programInput = {
-      title: normalizedTitle,
-      description: normalizedDescription,
-      host: selectedHost,
-    };
-
-    if (editingProgramId) {
-      onUpdateProgram(editingProgramId, programInput);
-    } else {
-      onCreateProgram(programInput);
-    }
-
-    closeModal();
+    setEditingProgram(null);
   };
 
   return (
@@ -151,50 +105,44 @@ function ProgramsView({
           New program
         </button>
       </div>
-      {isModalOpen ? (
-        <Modal
-          onClose={closeModal}
-          title={editingProgramId ? "Edit program" : "New program"}
-        >
-          <form
-            className="program-create-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              saveProgram();
-            }}
-          >
-            <label>
-              <span>Program</span>
-              <input
-                onChange={(event) => setTitle(event.target.value)}
-                value={title}
-              />
-            </label>
-            <label>
-              <span>Description</span>
-              <textarea
-                onChange={(event) => setDescription(event.target.value)}
-                value={description}
-              />
-            </label>
-            <MultiSelect
-              createPlaceholder="New host name"
-              label="Host"
-              multiple={false}
-              onChange={setHost}
-              onCreateOption={onAddHost}
-              options={hostNames}
-              placeholder="Select host"
-              value={host}
-            />
-            <div className="form-actions">
-              <button className="primary-action" type="submit">
-                {editingProgramId ? "Update program" : "Save program"}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      ) : null}
+      <ProgramDialog
+        hostNames={hostNames}
+        mode={editingProgram ? "edit" : "create"}
+        onAddHost={onAddHost}
+        onOpenChange={(open) => {
+          if (open) {
+            setIsModalOpen(true);
+            return;
+          }
+
+          closeModal();
+        }}
+        onSubmit={(programInput) =>
+          editingProgram
+            ? onUpdateProgram(editingProgram.id, programInput)
+            : onCreateProgram(programInput)
+        }
+        open={isModalOpen}
+        program={editingProgram}
+      />
+      <DeleteConfirmationDialog
+        confirmLabel="Delete program"
+        entityName={pendingDeleteProgram?.title}
+        onConfirm={async () => {
+          if (!pendingDeleteProgram) {
+            return;
+          }
+
+          await onDeleteProgram(pendingDeleteProgram.id);
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDeleteProgram(null);
+          }
+        }}
+        open={Boolean(pendingDeleteProgram)}
+        title="Delete program?"
+      />
       <div className="library-list">
         {programs.map((program) => {
           const hostRecord = findHost(hosts, program.host);
@@ -237,7 +185,7 @@ function ProgramsView({
                 </button>
                 <button
                   aria-label={`Delete ${program.title}`}
-                  onClick={() => onDeleteProgram(program.id)}
+                  onClick={() => setPendingDeleteProgram(program)}
                   type="button"
                 >
                   <Trash2 aria-hidden="true" size={14} strokeWidth={1.8} />

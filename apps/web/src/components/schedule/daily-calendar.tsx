@@ -11,8 +11,8 @@ import {
 import type React from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { MediaSlotField } from "@/components/MediaSlotField";
-import { MultiSelect } from "@/components/MultiSelect";
 import { ProgramSearchSelect } from "@/components/ProgramSearchSelect";
+import { HostMultiSelect } from "@/components/schedule/host-multi-select";
 import { mediaUrl } from "@/lib/api";
 import type {
   CreationRequest,
@@ -1099,7 +1099,7 @@ function CreationPanelFields({
         }))}
         selectedId={selectedProgramId}
       />
-      <MultiSelect
+      <HostMultiSelect
         createPlaceholder="New host name"
         disabled={isLocked}
         label="Host"
