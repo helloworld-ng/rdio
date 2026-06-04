@@ -13,6 +13,7 @@ COPY packages/config/package.json    packages/config/
 COPY packages/db/package.json        packages/db/
 COPY packages/env/package.json       packages/env/
 COPY packages/tsconfig/package.json packages/tsconfig/
+COPY packages/ui/package.json       packages/ui/
 
 RUN pnpm install --frozen-lockfile
 
