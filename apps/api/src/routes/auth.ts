@@ -7,7 +7,8 @@ import {
 import { env } from "@rdio/env/server";
 import type { FastifyInstance } from "fastify";
 import { requestSession } from "../lib/auth.js";
-import { isRecord, parseJsonBody } from "../lib/station-store.js";
+import { validateJsonBody } from "../lib/validation.js";
+import { changePasswordBodySchema } from "../schemas/api.js";
 
 export function authRoutes(server: FastifyInstance) {
   server.route({
@@ -60,15 +61,13 @@ export function authRoutes(server: FastifyInstance) {
       return reply.status(401).send({ error: "Unauthorized" });
     }
 
-    const body = parseJsonBody(request.body);
-    if (
-      !isRecord(body) ||
-      typeof body.currentPassword !== "string" ||
-      typeof body.newPassword !== "string"
-    ) {
-      return reply
-        .status(400)
-        .send({ error: "currentPassword and newPassword are required" });
+    const body = validateJsonBody(
+      reply,
+      changePasswordBodySchema,
+      request.body
+    );
+    if (!body) {
+      return;
     }
 
     await changeTemporaryPassword(

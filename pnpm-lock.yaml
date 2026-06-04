@@ -50,6 +50,9 @@ importers:
       fastify:
         specifier: ^5.1.0
         version: 5.8.5
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@rdio/tsconfig':
         specifier: workspace:*
