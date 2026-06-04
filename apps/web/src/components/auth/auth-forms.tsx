@@ -5,51 +5,14 @@ import {
   useRef,
   useState,
 } from "react";
-import { apiBaseUrl, apiFetch } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
-import { useAuth } from "@/providers/auth-provider";
 
-export function AuthLoadingPage() {
-  return (
-    <AuthPage description="Checking your session..." title="Loading station" />
-  );
+interface AuthFormProps {
+  onComplete: () => void;
 }
 
-export function SetupPage() {
-  const { refreshSession } = useAuth();
-  return <SetupForm onComplete={refreshSession} />;
-}
-
-export function LoginPage() {
-  const { refreshSession } = useAuth();
-  return <LoginForm onComplete={refreshSession} />;
-}
-
-export function ChangePasswordPage() {
-  const { refreshSession } = useAuth();
-  return <ChangePasswordForm onComplete={refreshSession} />;
-}
-
-function AuthPage({
-  children,
-  description,
-  title,
-}: PropsWithChildren<{ description: string; title: string }>) {
-  return (
-    <main className="auth-page">
-      <section className="auth-card">
-        <span className="auth-brand">rdio</span>
-        <div>
-          <h1>{title}</h1>
-          <p>{description}</p>
-        </div>
-        {children}
-      </section>
-    </main>
-  );
-}
-
-function SetupForm({ onComplete }: { onComplete: () => void }) {
+export function SetupForm({ onComplete }: AuthFormProps) {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -83,50 +46,45 @@ function SetupForm({ onComplete }: { onComplete: () => void }) {
   }
 
   return (
-    <AuthPage
-      description="Create the first administrator account. Additional members can be added after sign-in."
-      title="Set up your station"
+    <AuthForm
+      error={error}
+      isSubmitting={isSubmitting}
+      onSubmit={submit}
+      submitLabel="Create administrator"
     >
-      <AuthForm
-        error={error}
-        isSubmitting={isSubmitting}
-        onSubmit={submit}
-        submitLabel="Create administrator"
-      >
-        <label>
-          Name
-          <input autoComplete="name" name="name" required />
-        </label>
-        <label>
-          Email
-          <input autoComplete="email" name="email" required type="email" />
-        </label>
-        <label htmlFor="setup-password">
-          Password
-          <PasswordInput
-            autoComplete="new-password"
-            id="setup-password"
-            minLength={8}
-            name="password"
-            required
-          />
-        </label>
-        <label htmlFor="setup-confirm-password">
-          Confirm password
-          <PasswordInput
-            autoComplete="new-password"
-            id="setup-confirm-password"
-            minLength={8}
-            name="confirmPassword"
-            required
-          />
-        </label>
-      </AuthForm>
-    </AuthPage>
+      <label>
+        Name
+        <input autoComplete="name" name="name" required />
+      </label>
+      <label>
+        Email
+        <input autoComplete="email" name="email" required type="email" />
+      </label>
+      <label htmlFor="setup-password">
+        Password
+        <PasswordInput
+          autoComplete="new-password"
+          id="setup-password"
+          minLength={8}
+          name="password"
+          required
+        />
+      </label>
+      <label htmlFor="setup-confirm-password">
+        Confirm password
+        <PasswordInput
+          autoComplete="new-password"
+          id="setup-confirm-password"
+          minLength={8}
+          name="confirmPassword"
+          required
+        />
+      </label>
+    </AuthForm>
   );
 }
 
-function LoginForm({ onComplete }: { onComplete: () => void }) {
+export function LoginForm({ onComplete }: AuthFormProps) {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -151,35 +109,30 @@ function LoginForm({ onComplete }: { onComplete: () => void }) {
   }
 
   return (
-    <AuthPage
-      description="Use your station account to open the control room."
-      title="Sign in"
+    <AuthForm
+      error={error}
+      isSubmitting={isSubmitting}
+      onSubmit={submit}
+      submitLabel="Sign in"
     >
-      <AuthForm
-        error={error}
-        isSubmitting={isSubmitting}
-        onSubmit={submit}
-        submitLabel="Sign in"
-      >
-        <label>
-          Email
-          <input autoComplete="email" name="email" required type="email" />
-        </label>
-        <label htmlFor="login-password">
-          Password
-          <PasswordInput
-            autoComplete="current-password"
-            id="login-password"
-            name="password"
-            required
-          />
-        </label>
-      </AuthForm>
-    </AuthPage>
+      <label>
+        Email
+        <input autoComplete="email" name="email" required type="email" />
+      </label>
+      <label htmlFor="login-password">
+        Password
+        <PasswordInput
+          autoComplete="current-password"
+          id="login-password"
+          name="password"
+          required
+        />
+      </label>
+    </AuthForm>
   );
 }
 
-function ChangePasswordForm({ onComplete }: { onComplete: () => void }) {
+export function ChangePasswordForm({ onComplete }: AuthFormProps) {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -197,17 +150,17 @@ function ChangePasswordForm({ onComplete }: { onComplete: () => void }) {
 
     setIsSubmitting(true);
     setError("");
-    const response = await apiFetch(`${apiBaseUrl}/auth/change-password`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const response = await apiFetch("/auth/change-password", {
       body: JSON.stringify({ currentPassword, newPassword }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
     });
     setIsSubmitting(false);
 
     if (!response.ok) {
       const data = (await response.json().catch(() => null)) as {
-        message?: string;
         error?: string;
+        message?: string;
       } | null;
       setError(data?.message ?? data?.error ?? "Could not change password.");
       return;
@@ -217,47 +170,42 @@ function ChangePasswordForm({ onComplete }: { onComplete: () => void }) {
   }
 
   return (
-    <AuthPage
-      description="Replace the temporary password before opening the station dashboard."
-      title="Choose a new password"
+    <AuthForm
+      error={error}
+      isSubmitting={isSubmitting}
+      onSubmit={submit}
+      submitLabel="Update password"
     >
-      <AuthForm
-        error={error}
-        isSubmitting={isSubmitting}
-        onSubmit={submit}
-        submitLabel="Update password"
-      >
-        <label htmlFor="change-current-password">
-          Temporary password
-          <PasswordInput
-            autoComplete="current-password"
-            id="change-current-password"
-            name="currentPassword"
-            required
-          />
-        </label>
-        <label htmlFor="change-new-password">
-          New password
-          <PasswordInput
-            autoComplete="new-password"
-            id="change-new-password"
-            minLength={8}
-            name="newPassword"
-            required
-          />
-        </label>
-        <label htmlFor="change-confirm-password">
-          Confirm new password
-          <PasswordInput
-            autoComplete="new-password"
-            id="change-confirm-password"
-            minLength={8}
-            name="confirmation"
-            required
-          />
-        </label>
-      </AuthForm>
-    </AuthPage>
+      <label htmlFor="change-current-password">
+        Temporary password
+        <PasswordInput
+          autoComplete="current-password"
+          id="change-current-password"
+          name="currentPassword"
+          required
+        />
+      </label>
+      <label htmlFor="change-new-password">
+        New password
+        <PasswordInput
+          autoComplete="new-password"
+          id="change-new-password"
+          minLength={8}
+          name="newPassword"
+          required
+        />
+      </label>
+      <label htmlFor="change-confirm-password">
+        Confirm new password
+        <PasswordInput
+          autoComplete="new-password"
+          id="change-confirm-password"
+          minLength={8}
+          name="confirmation"
+          required
+        />
+      </label>
+    </AuthForm>
   );
 }
 

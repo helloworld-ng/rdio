@@ -1,16 +1,22 @@
+import { useQuery } from "@tanstack/react-query";
 import { Radio } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useCurrentStation } from "@/app";
 import { SettingsRow } from "@/components/ui/settings-list";
-import { apiBaseUrl, apiFetch } from "@/lib/api";
+import { StationLoading } from "@/components/ui/station-loading";
+import { apiFetch } from "@/lib/api";
+import { stationQueryOptions } from "@/lib/queries/station";
 import type { BroadcastIcecastSettings, StationSummary } from "@/types/station";
 
 const leadingSlashPattern = /^\//;
 
 export function BroadcastPage() {
-  const station = useCurrentStation();
+  const stationQuery = useQuery(stationQueryOptions());
 
-  return <BroadcastView station={station} />;
+  if (!stationQuery.data) {
+    return <StationLoading failed={stationQuery.isError} />;
+  }
+
+  return <BroadcastView station={stationQuery.data} />;
 }
 
 function BroadcastView({ station }: { station: StationSummary }) {
@@ -28,7 +34,7 @@ function BroadcastView({ station }: { station: StationSummary }) {
     let cancelled = false;
     async function poll() {
       try {
-        const res = await fetch(`${apiBaseUrl}/broadcast/status`);
+        const res = await apiFetch("/broadcast/status");
         if (!cancelled && res.ok) {
           const data = (await res.json()) as { active: boolean };
           setIsConnected(data.active);
@@ -141,7 +147,7 @@ function BroadcastView({ station }: { station: StationSummary }) {
 }
 
 async function fetchBroadcastSettings(): Promise<BroadcastIcecastSettings | null> {
-  const res = await apiFetch(`${apiBaseUrl}/broadcast/settings`);
+  const res = await apiFetch("/broadcast/settings");
 
   if (res.status === 404) {
     return null;

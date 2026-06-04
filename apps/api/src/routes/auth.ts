@@ -13,7 +13,7 @@ import { changePasswordBodySchema } from "../schemas/api.js";
 /** Serializes Fastify bodies for the Better Auth handler (global parser uses buffers). */
 function serializeAuthBody(body: unknown) {
   if (body === undefined) {
-    return undefined;
+    return;
   }
 
   if (Buffer.isBuffer(body)) {

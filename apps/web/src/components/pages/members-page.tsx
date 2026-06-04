@@ -1,27 +1,22 @@
+import { useQuery } from "@tanstack/react-query";
 import { Settings, Trash2, UserPlus, X } from "lucide-react";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
-import { useAppLayout, useCurrentStation } from "@/app";
-import { StationSettings } from "@/components/pages/settings-page";
-import { apiBaseUrl, apiFetch } from "@/lib/api";
+import { type FormEvent, useState } from "react";
+import { SettingsPage } from "@/components/pages/settings-page";
+import {
+  membersQueryOptions,
+  useCreateMember,
+  useDeleteMember,
+  useUpdateMemberRole,
+} from "@/lib/queries/members";
 import { useAuthenticatedUser } from "@/providers/auth-provider";
-
-interface Member {
-  email: string;
-  id: string;
-  mustChangePassword?: boolean;
-  name: string;
-  role?: string | null;
-}
-
-interface MembersResponse {
-  users: Member[];
-}
+import type { Member } from "@/types/api";
 
 export function MembersRoutePage() {
-  const { canViewMembers } = useAppLayout();
-  const station = useCurrentStation();
+  const user = useAuthenticatedUser();
+  const canViewMembers = user.role?.split(",").includes("admin") ?? false;
+
   if (!canViewMembers) {
-    return <StationSettings station={station} />;
+    return <SettingsPage />;
   }
 
   return <MembersPage />;
@@ -29,92 +24,56 @@ export function MembersRoutePage() {
 
 export function MembersPage() {
   const currentUser = useAuthenticatedUser();
-  const [members, setMembers] = useState<Member[]>([]);
+  const membersQuery = useQuery(membersQueryOptions());
+  const createMemberMutation = useCreateMember();
+  const deleteMemberMutation = useDeleteMember();
+  const updateMemberRoleMutation = useUpdateMemberRole();
   const [error, setError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [editingRoleMember, setEditingRoleMember] = useState<Member | null>(
     null
   );
   const [selectedRole, setSelectedRole] = useState("user");
-
-  const loadMembers = useCallback(async () => {
-    const response = await apiFetch(`${apiBaseUrl}/members`);
-    if (!response.ok) {
-      throw new Error("Could not load members.");
-    }
-
-    const data = (await response.json()) as MembersResponse;
-    setMembers(data.users);
-  }, []);
-
-  useEffect(() => {
-    loadMembers().catch((loadError: unknown) => {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Could not load members."
-      );
-    });
-  }, [loadMembers]);
+  const members = membersQuery.data ?? [];
+  const loadError =
+    membersQuery.error instanceof Error ? membersQuery.error.message : "";
 
   async function createMember(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
-    setIsSubmitting(true);
     setError("");
 
-    const response = await apiFetch(`${apiBaseUrl}/members`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    try {
+      await createMemberMutation.mutateAsync({
         name: String(data.get("name")),
         email: String(data.get("email")),
         password: String(data.get("password")),
-      }),
-    });
-
-    setIsSubmitting(false);
-    if (!response.ok) {
-      const body = (await response.json().catch(() => null)) as {
-        message?: string;
-        error?: string;
-      } | null;
-      setError(body?.message ?? body?.error ?? "Could not create member.");
-      return;
+      });
+      form.reset();
+    } catch (createError) {
+      setError(
+        createError instanceof Error
+          ? createError.message
+          : "Could not create member."
+      );
     }
-
-    form.reset();
-    await loadMembers();
   }
 
   async function deleteMember(id: string) {
-    const response = await apiFetch(`${apiBaseUrl}/members/${id}`, {
-      method: "DELETE",
-    });
-
-    if (!response.ok) {
+    try {
+      await deleteMemberMutation.mutateAsync(id);
+    } catch {
       setError("Could not delete member.");
-      return;
     }
-
-    await loadMembers();
   }
 
   async function updateRole(id: string, role: string) {
-    const response = await apiFetch(`${apiBaseUrl}/members/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role }),
-    });
-
-    if (!response.ok) {
+    try {
+      await updateMemberRoleMutation.mutateAsync({ id, role });
+    } catch {
       setError("Could not update role.");
-      return;
     }
-
-    await loadMembers();
   }
 
   const pendingDeleteMember = members.find((m) => m.id === pendingDeleteId);
@@ -249,13 +208,15 @@ export function MembersPage() {
         </label>
         <button
           className="primary-action"
-          disabled={isSubmitting}
+          disabled={createMemberMutation.isPending}
           type="submit"
         >
-          {isSubmitting ? "Creating..." : "Add member"}
+          {createMemberMutation.isPending ? "Creating..." : "Add member"}
         </button>
       </form>
-      {error ? <p className="form-error">{error}</p> : null}
+      {error || loadError ? (
+        <p className="form-error">{error || loadError}</p>
+      ) : null}
       <div className="members-list">
         {members.map((member) => (
           <article className="member-row" key={member.id}>

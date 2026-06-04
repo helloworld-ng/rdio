@@ -1,4 +1,4 @@
 import { createRdioAuthClient } from "@rdio/auth/client";
-import { apiBaseUrl } from "./api";
+import { API_BASE_URL } from "@/lib/constants";
 
-export const authClient = createRdioAuthClient(apiBaseUrl);
+export const authClient = createRdioAuthClient(API_BASE_URL);

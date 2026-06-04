@@ -1,10 +1,16 @@
+import { useQuery } from "@tanstack/react-query";
 import { ListMusic, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { useAppLayout } from "@/app";
 import { FileUploadField } from "@/components/FileUploadField";
 import { MediaPreviewThumb } from "@/components/MediaPreviewThumb";
 import { Modal } from "@/components/ui/modal";
-import { apiBaseUrl } from "@/lib/api";
+import { API_BASE_URL } from "@/lib/constants";
+import {
+  mediaQueryOptions,
+  useDeleteMedia,
+  useUploadMedia,
+} from "@/lib/queries/media";
+import { scheduleBlocksQueryOptions } from "@/lib/queries/schedule-blocks";
 import type { MediaItem } from "@/types/station";
 import { formatFileSize } from "@/utils";
 import { formatUploadTime } from "@/utils/time";
@@ -18,9 +24,76 @@ interface MediaPageProps {
 }
 
 export function MediaPage() {
-  const { mediaPage } = useAppLayout();
+  const mediaQuery = useQuery(mediaQueryOptions());
+  const scheduleBlocksQuery = useQuery(scheduleBlocksQueryOptions());
+  const uploadMediaMutation = useUploadMedia();
+  const deleteMediaMutation = useDeleteMedia();
+  const [filter, setFilter] = useState<"all" | MediaItem["type"]>("all");
+  const [pendingMediaDeleteId, setPendingMediaDeleteId] = useState<
+    string | null
+  >(null);
+  const blocks = scheduleBlocksQuery.data?.blocks ?? [];
+  const pendingMediaUseCount = pendingMediaDeleteId
+    ? blocks.filter((block) => block.mediaId === pendingMediaDeleteId).length
+    : 0;
 
-  return <MediaView {...mediaPage} />;
+  const deleteMediaFromPage = async (mediaId: string) => {
+    const scheduledUseCount = blocks.filter(
+      (block) => block.mediaId === mediaId
+    ).length;
+
+    if (scheduledUseCount > 0) {
+      setPendingMediaDeleteId(mediaId);
+      return;
+    }
+
+    await deleteMediaMutation.mutateAsync(mediaId);
+  };
+
+  return (
+    <>
+      <MediaView
+        filter={filter}
+        mediaItems={mediaQuery.data ?? []}
+        onChangeFilter={setFilter}
+        onDeleteMedia={deleteMediaFromPage}
+        onUploadMedia={uploadMediaMutation.mutateAsync}
+      />
+      {pendingMediaDeleteId ? (
+        <Modal
+          onClose={() => setPendingMediaDeleteId(null)}
+          title="Delete scheduled media?"
+        >
+          <div className="confirm-dialog">
+            <p>
+              This media file is used by {pendingMediaUseCount} schedule slot
+              {pendingMediaUseCount === 1 ? "" : "s"}. Delete it and clear those
+              slots?
+            </p>
+            <div className="form-actions">
+              <button
+                onClick={() => setPendingMediaDeleteId(null)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="primary-action"
+                onClick={() => {
+                  const mediaId = pendingMediaDeleteId;
+                  setPendingMediaDeleteId(null);
+                  deleteMediaMutation.mutate(mediaId);
+                }}
+                type="button"
+              >
+                Delete media
+              </button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+    </>
+  );
 }
 
 function MediaView({
@@ -140,7 +213,7 @@ function MediaView({
           <article className="library-row media-row" key={item.id}>
             <div className="media-row-body">
               <MediaPreviewThumb
-                apiBaseUrl={apiBaseUrl}
+                apiBaseUrl={API_BASE_URL}
                 name={item.name}
                 type={item.type}
                 url={item.url}
