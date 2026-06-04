@@ -1,12 +1,3 @@
-import React, {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { createRoot } from "react-dom/client";
 import type { FallbackSource } from "@rdio/rdio-core";
 import {
   BookOpen,
@@ -27,30 +18,41 @@ import {
   Users,
   X,
 } from "lucide-react";
+import type React from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createRoot } from "react-dom/client";
+import { AuthGate, useAuth } from "./components/AuthGate";
 import { FileUploadField } from "./components/FileUploadField";
-import { MediaSlotField } from "./components/MediaSlotField";
-import { MediaPreviewThumb } from "./components/MediaPreviewThumb";
 import { HostAvatar, hostPalette } from "./components/HostAvatar";
 import type { HostRecord } from "./components/HostsPage";
 import { HostsPage } from "./components/HostsPage";
-import { AuthGate, useAuth } from "./components/AuthGate";
+import { MediaPreviewThumb } from "./components/MediaPreviewThumb";
+import { MediaSlotField } from "./components/MediaSlotField";
 import { MembersPage } from "./components/MembersPage";
 import { MultiSelect } from "./components/MultiSelect";
+import { PlayerBar } from "./components/PlayerBar";
 import { ProgramSearchSelect } from "./components/ProgramSearchSelect";
 import { UserAccountMenu } from "./components/UserAccountMenu";
-import { PlayerBar } from "./components/PlayerBar";
 import { mockAnchorDate } from "./data/mockStation";
-import { formatFileSize } from "./utils";
 import { apiBaseUrl, apiFetch, mediaUrl } from "./lib/api";
+import { formatFileSize } from "./utils";
 import "./styles.css";
 
 const hours = Array.from({ length: 24 }, (_, hour) => hour);
 const defaultTimeZone = "UTC";
+const viewPathPattern = /^\/([^/]+)\/?$/;
 
 interface IcecastSettings {
   host: string;
-  port: number;
   mount: string;
+  port: number;
 }
 
 interface BroadcastIcecastSettings extends IcecastSettings {
@@ -58,19 +60,19 @@ interface BroadcastIcecastSettings extends IcecastSettings {
 }
 
 interface StationSummary {
-  id: string;
-  name: string;
-  slug: string;
-  timezone: string;
-  mount: string;
-  streamUrl: string;
+  broadcastIcecast: IcecastSettings & { sourcePassword?: string };
   fallbackSource: FallbackSource;
   icecast: IcecastSettings;
-  broadcastIcecast: IcecastSettings & { sourcePassword?: string };
+  id: string;
+  mount: string;
+  name: string;
+  slug: string;
+  streamUrl: string;
+  timezone: string;
 }
 
 function broadcastCredentialsFromStation(
-  station: StationSummary,
+  station: StationSummary
 ): BroadcastIcecastSettings | null {
   const { sourcePassword, host, port, mount } = station.broadcastIcecast;
   if (!sourcePassword) {
@@ -85,9 +87,9 @@ interface StationResponse {
 }
 
 interface UploadedFileSummary {
+  duration?: number; // seconds
   name: string;
   size: number;
-  duration?: number; // seconds
 }
 
 interface MediaItem {
@@ -114,32 +116,32 @@ interface ScheduleMutationResponse {
 }
 
 interface Program {
-  id: string;
-  title: string;
   description: string;
   host: string;
+  id: string;
+  title: string;
 }
 
 interface ScheduleBlock {
+  dateKey: string;
+  description: string;
+  endMinutes: number;
+  file?: UploadedFileSummary;
+  hosts: string[];
   id: string;
   kind: "recording" | "broadcast";
-  title: string;
-  description: string;
-  dateKey: string;
-  startMinutes: number;
-  endMinutes: number;
-  hosts: string[];
-  programId?: string;
-  file?: UploadedFileSummary;
   mediaId?: string;
+  programId?: string;
+  startMinutes: number;
+  title: string;
 }
 
 type ScheduleBlockDraft = Omit<ScheduleBlock, "id" | "dateKey">;
 
 interface DragDropPreview {
-  startMinutes: number;
-  durationMinutes: number;
   canDrop: boolean;
+  durationMinutes: number;
+  startMinutes: number;
 }
 
 interface CreationRequest {
@@ -242,10 +244,10 @@ function formatDateKeyInTimeZone(date: Date, timeZone: string) {
 
 function programTitleForBlock(
   block: ScheduleBlock | undefined,
-  programs: Program[],
+  programs: Program[]
 ) {
   if (!block) {
-    return undefined;
+    return;
   }
 
   if (block.programId) {
@@ -274,13 +276,6 @@ function formatDayTitle(date: Date) {
     month: "long",
     day: "numeric",
     year: "numeric",
-  }).format(date);
-}
-
-function formatShortDate(date: Date) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
   }).format(date);
 }
 
@@ -326,7 +321,7 @@ type MediaPlaybackNotice = "loop" | "truncate";
 
 function mediaPlaybackNotice(
   slotSeconds: number,
-  mediaSeconds: number | undefined,
+  mediaSeconds: number | undefined
 ): MediaPlaybackNotice | null {
   if (
     mediaSeconds === undefined ||
@@ -393,7 +388,7 @@ function timeRangesOverlap(
   startA: number,
   endA: number,
   startB: number,
-  endB: number,
+  endB: number
 ) {
   return startA < endB && endA > startB;
 }
@@ -415,7 +410,7 @@ function canPlaceBlockAt(
   blocks: ScheduleBlock[],
   movingBlockId: string,
   startMinutes: number,
-  durationMinutes: number,
+  durationMinutes: number
 ) {
   const duration = Math.max(30, durationMinutes);
   const endMinutes = startMinutes + duration;
@@ -429,7 +424,7 @@ function canPlaceBlockAt(
       startMinutes,
       endMinutes,
       block.startMinutes,
-      block.endMinutes,
+      block.endMinutes
     );
   });
 }
@@ -437,7 +432,7 @@ function canPlaceBlockAt(
 function blockConflictsWith(
   blocks: ScheduleBlock[],
   movingBlockId: string,
-  nextBlock: Pick<ScheduleBlock, "dateKey" | "startMinutes" | "endMinutes">,
+  nextBlock: Pick<ScheduleBlock, "dateKey" | "startMinutes" | "endMinutes">
 ) {
   return blocks.some((block) => {
     if (block.id === movingBlockId || block.dateKey !== nextBlock.dateKey) {
@@ -448,7 +443,7 @@ function blockConflictsWith(
       nextBlock.startMinutes,
       nextBlock.endMinutes,
       block.startMinutes,
-      block.endMinutes,
+      block.endMinutes
     );
   });
 }
@@ -456,7 +451,7 @@ function blockConflictsWith(
 function isBlockPastOrCurrent(
   block: ScheduleBlock,
   todayDateKey: string,
-  nowMinutes: number,
+  nowMinutes: number
 ) {
   return (
     block.dateKey < todayDateKey ||
@@ -468,7 +463,7 @@ function buildDragDropPreview(
   blocks: ScheduleBlock[],
   draggedBlockId: string,
   canvas: HTMLElement,
-  clientY: number,
+  clientY: number
 ): DragDropPreview | null {
   const block = blocks.find((entry) => entry.id === draggedBlockId);
 
@@ -479,13 +474,13 @@ function buildDragDropPreview(
   const durationMinutes = Math.max(30, block.endMinutes - block.startMinutes);
   const startMinutes = clampBlockStart(
     minutesFromClientY(canvas, clientY),
-    durationMinutes,
+    durationMinutes
   );
   const canDrop = canPlaceBlockAt(
     blocks,
     draggedBlockId,
     startMinutes,
-    durationMinutes,
+    durationMinutes
   );
 
   return { startMinutes, durationMinutes, canDrop };
@@ -501,7 +496,9 @@ function loadAudioDuration(src: string): Promise<number> {
 }
 
 function formatSlotDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes}min`;
+  if (minutes < 60) {
+    return `${minutes}min`;
+  }
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return m === 0 ? `${h}h` : `${h}h ${m}min`;
@@ -511,7 +508,7 @@ function buildDatePickerDays(monthDate: Date) {
   const firstOfMonth = new Date(
     monthDate.getFullYear(),
     monthDate.getMonth(),
-    1,
+    1
   );
   const gridStart = addDays(firstOfMonth, -firstOfMonth.getDay());
 
@@ -519,7 +516,7 @@ function buildDatePickerDays(monthDate: Date) {
 }
 
 function readViewName(): ViewName {
-  const match = window.location.pathname.match(/^\/([^/]+)\/?$/);
+  const match = window.location.pathname.match(viewPathPattern);
   const view = match?.[1];
 
   return view === "programs" ||
@@ -539,12 +536,12 @@ function App() {
   const [stationLoadFailed, setStationLoadFailed] = useState(false);
   const [activeView, setActiveView] = useState<ViewName>(readViewName);
   const [isSidebarVisible, setIsSidebarVisible] = useState(
-    readInitialSidebarVisible,
+    readInitialSidebarVisible
   );
   const [isMobileSidebar, setIsMobileSidebar] = useState(
     () =>
       typeof window !== "undefined" &&
-      window.matchMedia(MOBILE_SIDEBAR_QUERY).matches,
+      window.matchMedia(MOBILE_SIDEBAR_QUERY).matches
   );
 
   useEffect(() => {
@@ -566,11 +563,11 @@ function App() {
   }, [isSidebarVisible]);
 
   const [selectedDate, setSelectedDate] = useState(
-    () => new Date(mockAnchorDate),
+    () => new Date(mockAnchorDate)
   );
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [datePickerMonth, setDatePickerMonth] = useState(
-    () => new Date(mockAnchorDate.getFullYear(), mockAnchorDate.getMonth(), 1),
+    () => new Date(mockAnchorDate.getFullYear(), mockAnchorDate.getMonth(), 1)
   );
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
   const [isScheduleLoaded, setIsScheduleLoaded] = useState(false);
@@ -579,10 +576,14 @@ function App() {
     "idle" | "saving" | "saved"
   >("idle");
   const scheduleVersionRef = useRef<string | null>(null);
+  const isScheduleInitializedRef = useRef(false);
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [mediaFilter, setMediaFilter] = useState<"all" | MediaItem["type"]>(
-    "all",
+    "all"
   );
+  const [pendingMediaDeleteId, setPendingMediaDeleteId] = useState<
+    string | null
+  >(null);
   const [hosts, setHosts] = useState<HostRecord[]>([]);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [creationRequest, setCreationRequest] =
@@ -592,14 +593,14 @@ function App() {
   const [dragDropPreview, setDragDropPreview] =
     useState<DragDropPreview | null>(null);
   const [scheduleFocusToken, setScheduleFocusToken] = useState(1);
-  const [nowTick, setNowTick] = useState(0);
+  const [, setNowTick] = useState(0);
   const currentStation = stations[0] ?? null;
   const stationTimeZone = currentStation?.timezone ?? defaultTimeZone;
 
   useEffect(() => {
     const interval = window.setInterval(
       () => setNowTick((tick) => tick + 1),
-      60_000,
+      60_000
     );
 
     return () => window.clearInterval(interval);
@@ -645,11 +646,11 @@ function App() {
           setStations([data.station]);
           const stationToday = dateInTimeZone(
             new Date(),
-            data.station.timezone,
+            data.station.timezone
           );
           setSelectedDate(stationToday);
           setDatePickerMonth(
-            new Date(stationToday.getFullYear(), stationToday.getMonth(), 1),
+            new Date(stationToday.getFullYear(), stationToday.getMonth(), 1)
           );
           setStationLoadFailed(false);
         }
@@ -661,7 +662,7 @@ function App() {
       }
     }
 
-    void loadStation();
+    loadStation().catch(() => undefined);
 
     return () => {
       ignore = true;
@@ -695,7 +696,7 @@ function App() {
       }
     }
 
-    void loadScheduleBlocks();
+    loadScheduleBlocks().catch(() => undefined);
 
     return () => {
       ignore = true;
@@ -707,14 +708,18 @@ function App() {
     async function load() {
       try {
         const res = await apiFetch(`${apiBaseUrl}/programs`);
-        if (!res.ok) return;
+        if (!res.ok) {
+          return;
+        }
         const data = (await res.json()) as { programs: Program[] };
-        if (!ignore) setPrograms(data.programs);
+        if (!ignore) {
+          setPrograms(data.programs);
+        }
       } catch {
         /* ignore */
       }
     }
-    void load();
+    load().catch(() => undefined);
     return () => {
       ignore = true;
     };
@@ -725,14 +730,18 @@ function App() {
     async function load() {
       try {
         const res = await apiFetch(`${apiBaseUrl}/hosts`);
-        if (!res.ok) return;
+        if (!res.ok) {
+          return;
+        }
         const data = (await res.json()) as { hosts: HostRecord[] };
-        if (!ignore) setHosts(data.hosts);
+        if (!ignore) {
+          setHosts(data.hosts);
+        }
       } catch {
         /* ignore */
       }
     }
-    void load();
+    load().catch(() => undefined);
     return () => {
       ignore = true;
     };
@@ -743,9 +752,14 @@ function App() {
       return;
     }
 
+    if (!isScheduleInitializedRef.current) {
+      isScheduleInitializedRef.current = true;
+      return;
+    }
+
     const timeout = window.setTimeout(() => {
       setScheduleSaveState("saving");
-      void (async () => {
+      const saveSchedule = async () => {
         try {
           const response = await apiFetch(`${apiBaseUrl}/schedule-blocks`, {
             body: JSON.stringify({
@@ -774,7 +788,7 @@ function App() {
 
             setScheduleSaveState("idle");
             setScheduleSaveError(
-              data.error ?? "Could not save schedule changes.",
+              data.error ?? "Could not save schedule changes."
             );
             return;
           }
@@ -785,11 +799,14 @@ function App() {
 
           setScheduleSaveState("saved");
           setScheduleSaveError("");
+          window.setTimeout(() => setScheduleSaveState("idle"), 2000);
         } catch {
           setScheduleSaveState("idle");
           setScheduleSaveError("Could not save schedule changes.");
         }
-      })();
+      };
+
+      saveSchedule().catch(() => undefined);
     }, 250);
 
     return () => window.clearTimeout(timeout);
@@ -818,7 +835,7 @@ function App() {
       }
     }
 
-    void loadMedia();
+    loadMedia().catch(() => undefined);
 
     return () => {
       ignore = true;
@@ -832,7 +849,7 @@ function App() {
       blocks
         .filter((block) => block.dateKey === selectedDateKey)
         .sort((a, b) => a.startMinutes - b.startMinutes),
-    [blocks, selectedDateKey],
+    [blocks, selectedDateKey]
   );
   const todayDateKey = formatDateKeyInTimeZone(new Date(), stationTimeZone);
   const todayBlocks = useMemo(
@@ -840,22 +857,24 @@ function App() {
       blocks
         .filter((block) => block.dateKey === todayDateKey)
         .sort((a, b) => a.startMinutes - b.startMinutes),
-    [blocks, todayDateKey],
+    [blocks, todayDateKey]
   );
   const currentOnAirBlock = useMemo(() => {
     const nowMinutes = getNowMinutes(new Date(), stationTimeZone);
 
     return todayBlocks.find(
       (block) =>
-        block.startMinutes <= nowMinutes && block.endMinutes > nowMinutes,
+        block.startMinutes <= nowMinutes && block.endMinutes > nowMinutes
     );
-  }, [stationTimeZone, todayBlocks, nowTick]);
+  }, [stationTimeZone, todayBlocks]);
   const playerProgramName = programTitleForBlock(currentOnAirBlock, programs);
+  const scheduleSaveMessage =
+    scheduleSaveError || scheduleSaveStateMessage(scheduleSaveState);
   const changeView = (nextView: ViewName) => {
     window.history.pushState(
       {},
       "",
-      nextView === "schedule" ? "/schedule" : `/${nextView}`,
+      nextView === "schedule" ? "/schedule" : `/${nextView}`
     );
     setActiveView(nextView);
 
@@ -875,7 +894,7 @@ function App() {
     setSelectedDate((current) => {
       const nextDate = addDays(current, offset);
       setDatePickerMonth(
-        new Date(nextDate.getFullYear(), nextDate.getMonth(), 1),
+        new Date(nextDate.getFullYear(), nextDate.getMonth(), 1)
       );
       return nextDate;
     });
@@ -886,7 +905,7 @@ function App() {
   const selectDate = (nextDate: Date) => {
     setSelectedDate(nextDate);
     setDatePickerMonth(
-      new Date(nextDate.getFullYear(), nextDate.getMonth(), 1),
+      new Date(nextDate.getFullYear(), nextDate.getMonth(), 1)
     );
     setIsDatePickerOpen(false);
     setCreationRequest(null);
@@ -941,7 +960,7 @@ function App() {
         setScheduleSaveError("");
         setScheduleSaveState("idle");
         return nextBlock;
-      }),
+      })
     );
     setSelectedBlockId(blockId);
   };
@@ -994,7 +1013,7 @@ function App() {
 
       const duration = Math.max(
         30,
-        movingBlock.endMinutes - movingBlock.startMinutes,
+        movingBlock.endMinutes - movingBlock.startMinutes
       );
       const nextStartMinutes = clampBlockStart(startMinutes, duration);
 
@@ -1029,7 +1048,7 @@ function App() {
 
   const beginCreate = (
     hour: number,
-    kind: ScheduleBlock["kind"] | null = "recording",
+    kind: ScheduleBlock["kind"] | null = "recording"
   ) => {
     setCreationRequest({ dateKey: selectedDateKey, hour, kind });
     setSelectedBlockId(null);
@@ -1085,23 +1104,11 @@ function App() {
   };
 
   const deleteMedia = async (mediaId: string) => {
-    const scheduledUseCount = blocks.filter(
-      (block) => block.mediaId === mediaId,
-    ).length;
-    if (
-      scheduledUseCount > 0 &&
-      !window.confirm(
-        `This media file is used by ${scheduledUseCount} schedule slot${scheduledUseCount === 1 ? "" : "s"}. Delete it and clear those slots?`,
-      )
-    ) {
-      return;
-    }
-
     const response = await apiFetch(
       `${apiBaseUrl}/media/${encodeURIComponent(mediaId)}`,
       {
         method: "DELETE",
-      },
+      }
     );
 
     if (!response.ok) {
@@ -1116,10 +1123,10 @@ function App() {
   return (
     <main className="app-page">
       <section
+        aria-label="Rdio scheduler"
         className={
           currentStation ? "app-shell" : "app-shell is-station-loading"
         }
-        aria-label="Rdio scheduler"
       >
         <PageHeader
           alignWithSidebar={
@@ -1128,6 +1135,11 @@ function App() {
           isSidebarOpen={isSidebarVisible}
           onToggleSidebar={() => setIsSidebarVisible((current) => !current)}
         />
+        {activeView === "schedule" && scheduleSaveMessage ? (
+          <p aria-live="polite" className="schedule-save-status">
+            {scheduleSaveMessage}
+          </p>
+        ) : null}
         <div
           className={
             isSidebarVisible && currentStation && !isMobileSidebar
@@ -1137,10 +1149,10 @@ function App() {
         >
           {currentStation && isSidebarVisible && isMobileSidebar ? (
             <button
-              className="sidebar-backdrop"
-              type="button"
               aria-label="Close menu"
+              className="sidebar-backdrop"
               onClick={() => setIsSidebarVisible(false)}
+              type="button"
             />
           ) : null}
           {currentStation && isSidebarVisible ? (
@@ -1151,193 +1163,219 @@ function App() {
             />
           ) : null}
           <div className={currentStation ? "shell station-shell" : "shell"}>
-            {!currentStation ? (
-              <StationLoading failed={stationLoadFailed} />
-            ) : activeView === "schedule" ? (
-              <DailyCalendar
-                blocks={dayBlocks}
-                creationRequest={creationRequest}
-                datePickerMonth={datePickerMonth}
-                dragDropPreview={dragDropPreview}
-                draggedBlockId={draggedBlockId}
-                focusNowToken={scheduleFocusToken}
-                isMobileLayout={isMobileSidebar}
-                hosts={getHostNames(hosts)}
-                isDatePickerOpen={isDatePickerOpen}
-                mediaItems={mediaItems}
-                programs={programs}
-                selectedBlockId={selectedBlockId}
-                selectedDate={selectedDate}
-                selectedDateKey={selectedDateKey}
-                stationTimeZone={stationTimeZone}
-                todayDateKey={todayDateKey}
-                onAddHost={async (hostName) => {
-                  const host = addHostByName(hosts, hostName)[hosts.length];
-                  if (!host) return;
-                  const res = await apiFetch(`${apiBaseUrl}/hosts`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(host),
-                  });
-                  if (res.ok)
-                    setHosts((current) => addHostByName(current, hostName));
-                }}
-                onBeginCreate={beginCreate}
-                onChangeCreationKind={(kind) =>
-                  setCreationRequest((current) =>
-                    current ? { ...current, kind } : current,
-                  )
-                }
-                onDatePickerMonthChange={setDatePickerMonth}
-                onCloseSlotPanel={closeSlotPanel}
-                onDuplicateBlock={duplicateBlock}
-                onMoveBlock={moveBlock}
-                onMoveDay={moveDay}
-                onRemoveBlock={removeBlock}
-                onSaveBlock={saveBlock}
-                onSelectBlock={selectBlock}
-                onSelectDate={selectDate}
-                onSetDragDropPreview={setDragDropPreview}
-                onSetDraggedBlockId={setDraggedBlockId}
-                onToggleDatePicker={() =>
-                  setIsDatePickerOpen((current) => !current)
-                }
-                onUpdateBlock={updateBlock}
-                onUploadMedia={uploadMedia}
-              />
-            ) : activeView === "programs" ? (
-              <ProgramsPage
-                hosts={hosts}
-                programs={programs}
-                onAddHost={async (hostName) => {
-                  const host = addHostByName(hosts, hostName)[hosts.length];
-                  if (!host) return;
-                  const res = await apiFetch(`${apiBaseUrl}/hosts`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(host),
-                  });
-                  if (res.ok)
-                    setHosts((current) => addHostByName(current, hostName));
-                }}
-                onCreateProgram={async (program) => {
-                  const res = await apiFetch(`${apiBaseUrl}/programs`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(program),
-                  });
-                  if (res.ok) {
-                    const data = (await res.json()) as { program: Program };
-                    setPrograms((current) => [...current, data.program]);
-                  }
-                }}
-                onUpdateProgram={async (programId, program) => {
-                  const res = await apiFetch(
-                    `${apiBaseUrl}/programs/${programId}`,
-                    {
-                      method: "PUT",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify(program),
-                    },
-                  );
-                  if (res.ok) {
-                    const data = (await res.json()) as {
-                      program: Program;
-                    } & ScheduleMutationResponse;
-                    setPrograms((current) =>
-                      current.map((item) =>
-                        item.id === programId ? data.program : item,
-                      ),
+            {currentStation ? (
+              activeView === "schedule" ? (
+                <DailyCalendar
+                  blocks={dayBlocks}
+                  creationRequest={creationRequest}
+                  datePickerMonth={datePickerMonth}
+                  dragDropPreview={dragDropPreview}
+                  draggedBlockId={draggedBlockId}
+                  focusNowToken={scheduleFocusToken}
+                  hosts={getHostNames(hosts)}
+                  isDatePickerOpen={isDatePickerOpen}
+                  isMobileLayout={isMobileSidebar}
+                  mediaItems={mediaItems}
+                  onAddHost={async (hostName) => {
+                    const host = addHostByName(hosts, hostName).at(
+                      hosts.length
                     );
-                    applyScheduleMutation(data);
-                  }
-                }}
-                onDeleteProgram={async (programId) => {
-                  const res = await apiFetch(
-                    `${apiBaseUrl}/programs/${programId}`,
-                    { method: "DELETE" },
-                  );
-                  if (res.ok) {
-                    const data = (await res.json()) as ScheduleMutationResponse;
-                    setPrograms((current) =>
-                      current.filter((item) => item.id !== programId),
-                    );
-                    applyScheduleMutation(data);
-                  }
-                }}
-              />
-            ) : activeView === "hosts" ? (
-              <HostsPage
-                hosts={hosts}
-                onAddHost={async (host) => {
-                  const res = await apiFetch(`${apiBaseUrl}/hosts`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(host),
-                  });
-                  if (res.ok)
-                    setHosts((current) =>
-                      current.some((item) => item.name === host.name)
-                        ? current
-                        : [...current, host],
-                    );
-                }}
-                onRemoveHost={async (hostName) => {
-                  const res = await apiFetch(
-                    `${apiBaseUrl}/hosts/${encodeURIComponent(hostName)}`,
-                    { method: "DELETE" },
-                  );
-                  if (res.ok)
-                    setHosts((current) =>
-                      current.filter((item) => item.name !== hostName),
-                    );
-                }}
-                onUpdateHost={async (hostName, host) => {
-                  const res = await apiFetch(
-                    `${apiBaseUrl}/hosts/${encodeURIComponent(hostName)}`,
-                    {
-                      method: "PUT",
+                    if (!host) {
+                      return;
+                    }
+                    const res = await apiFetch(`${apiBaseUrl}/hosts`, {
+                      method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify(host),
-                    },
-                  );
-                  if (res.ok) {
-                    const data = (await res.json()) as {
-                      host: HostRecord;
-                    } & ScheduleMutationResponse;
-                    setHosts((current) =>
-                      current.map((item) =>
-                        item.name === hostName ? host : item,
-                      ),
+                    });
+                    if (res.ok) {
+                      setHosts((current) => addHostByName(current, hostName));
+                    }
+                  }}
+                  onBeginCreate={beginCreate}
+                  onChangeCreationKind={(kind) =>
+                    setCreationRequest((current) =>
+                      current ? { ...current, kind } : current
+                    )
+                  }
+                  onCloseSlotPanel={closeSlotPanel}
+                  onDatePickerMonthChange={setDatePickerMonth}
+                  onDuplicateBlock={duplicateBlock}
+                  onMoveBlock={moveBlock}
+                  onMoveDay={moveDay}
+                  onRemoveBlock={removeBlock}
+                  onSaveBlock={saveBlock}
+                  onSelectBlock={selectBlock}
+                  onSelectDate={selectDate}
+                  onSetDragDropPreview={setDragDropPreview}
+                  onSetDraggedBlockId={setDraggedBlockId}
+                  onToggleDatePicker={() =>
+                    setIsDatePickerOpen((current) => !current)
+                  }
+                  onUpdateBlock={updateBlock}
+                  onUploadMedia={uploadMedia}
+                  programs={programs}
+                  selectedBlockId={selectedBlockId}
+                  selectedDate={selectedDate}
+                  selectedDateKey={selectedDateKey}
+                  stationTimeZone={stationTimeZone}
+                  todayDateKey={todayDateKey}
+                />
+              ) : activeView === "programs" ? (
+                <ProgramsPage
+                  hosts={hosts}
+                  onAddHost={async (hostName) => {
+                    const host = addHostByName(hosts, hostName).at(
+                      hosts.length
                     );
-                    if (hostName !== host.name) {
+                    if (!host) {
+                      return;
+                    }
+                    const res = await apiFetch(`${apiBaseUrl}/hosts`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(host),
+                    });
+                    if (res.ok) {
+                      setHosts((current) => addHostByName(current, hostName));
+                    }
+                  }}
+                  onCreateProgram={async (program) => {
+                    const res = await apiFetch(`${apiBaseUrl}/programs`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(program),
+                    });
+                    if (res.ok) {
+                      const data = (await res.json()) as { program: Program };
+                      setPrograms((current) => [...current, data.program]);
+                    }
+                  }}
+                  onDeleteProgram={async (programId) => {
+                    const res = await apiFetch(
+                      `${apiBaseUrl}/programs/${programId}`,
+                      { method: "DELETE" }
+                    );
+                    if (res.ok) {
+                      const data =
+                        (await res.json()) as ScheduleMutationResponse;
                       setPrograms((current) =>
-                        current.map((item) =>
-                          item.host === hostName
-                            ? { ...item, host: host.name }
-                            : item,
-                        ),
+                        current.filter((item) => item.id !== programId)
                       );
                       applyScheduleMutation(data);
                     }
-                  }
-                }}
-              />
-            ) : activeView === "media" ? (
-              <MediaPage
-                filter={mediaFilter}
-                mediaItems={mediaItems}
-                onChangeFilter={setMediaFilter}
-                onDeleteMedia={deleteMedia}
-                onUploadMedia={uploadMedia}
-              />
-            ) : activeView === "broadcast" ? (
-              <BroadcastPage station={currentStation} />
-            ) : activeView === "members" &&
-              user.role?.split(",").includes("admin") ? (
-              <MembersPage />
+                  }}
+                  onUpdateProgram={async (programId, program) => {
+                    const res = await apiFetch(
+                      `${apiBaseUrl}/programs/${programId}`,
+                      {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(program),
+                      }
+                    );
+                    if (res.ok) {
+                      const data = (await res.json()) as {
+                        program: Program;
+                      } & ScheduleMutationResponse;
+                      setPrograms((current) =>
+                        current.map((item) =>
+                          item.id === programId ? data.program : item
+                        )
+                      );
+                      applyScheduleMutation(data);
+                    }
+                  }}
+                  programs={programs}
+                />
+              ) : activeView === "hosts" ? (
+                <HostsPage
+                  hosts={hosts}
+                  onAddHost={async (host) => {
+                    const res = await apiFetch(`${apiBaseUrl}/hosts`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(host),
+                    });
+                    if (res.ok) {
+                      setHosts((current) =>
+                        current.some((item) => item.name === host.name)
+                          ? current
+                          : [...current, host]
+                      );
+                    }
+                  }}
+                  onRemoveHost={async (hostName) => {
+                    const res = await apiFetch(
+                      `${apiBaseUrl}/hosts/${encodeURIComponent(hostName)}`,
+                      { method: "DELETE" }
+                    );
+                    if (res.ok) {
+                      setHosts((current) =>
+                        current.filter((item) => item.name !== hostName)
+                      );
+                    }
+                  }}
+                  onUpdateHost={async (hostName, host) => {
+                    const res = await apiFetch(
+                      `${apiBaseUrl}/hosts/${encodeURIComponent(hostName)}`,
+                      {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(host),
+                      }
+                    );
+                    if (res.ok) {
+                      const data = (await res.json()) as {
+                        host: HostRecord;
+                      } & ScheduleMutationResponse;
+                      setHosts((current) =>
+                        current.map((item) =>
+                          item.name === hostName ? host : item
+                        )
+                      );
+                      if (hostName !== host.name) {
+                        setPrograms((current) =>
+                          current.map((item) =>
+                            item.host === hostName
+                              ? { ...item, host: host.name }
+                              : item
+                          )
+                        );
+                        applyScheduleMutation(data);
+                      }
+                    }
+                  }}
+                />
+              ) : activeView === "media" ? (
+                <MediaPage
+                  filter={mediaFilter}
+                  mediaItems={mediaItems}
+                  onChangeFilter={setMediaFilter}
+                  onDeleteMedia={async (mediaId) => {
+                    const scheduledUseCount = blocks.filter(
+                      (block) => block.mediaId === mediaId
+                    ).length;
+
+                    if (scheduledUseCount > 0) {
+                      setPendingMediaDeleteId(mediaId);
+                      return;
+                    }
+
+                    await deleteMedia(mediaId);
+                  }}
+                  onUploadMedia={uploadMedia}
+                />
+              ) : activeView === "broadcast" ? (
+                <BroadcastPage station={currentStation} />
+              ) : activeView === "members" &&
+                user.role?.split(",").includes("admin") ? (
+                <MembersPage />
+              ) : (
+                <StationSettings station={currentStation} />
+              )
             ) : (
-              <StationSettings station={currentStation} />
+              <StationLoading failed={stationLoadFailed} />
             )}
           </div>
         </div>
@@ -1348,6 +1386,47 @@ function App() {
           streamUrl={currentStation?.streamUrl ?? ""}
         />
       </section>
+      {pendingMediaDeleteId ? (
+        <Modal
+          onClose={() => setPendingMediaDeleteId(null)}
+          title="Delete scheduled media?"
+        >
+          <div className="confirm-dialog">
+            <p>
+              This media file is used by{" "}
+              {
+                blocks.filter((block) => block.mediaId === pendingMediaDeleteId)
+                  .length
+              }{" "}
+              schedule slot
+              {blocks.filter((block) => block.mediaId === pendingMediaDeleteId)
+                .length === 1
+                ? ""
+                : "s"}
+              . Delete it and clear those slots?
+            </p>
+            <div className="form-actions">
+              <button
+                onClick={() => setPendingMediaDeleteId(null)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="primary-action"
+                onClick={() => {
+                  const mediaId = pendingMediaDeleteId;
+                  setPendingMediaDeleteId(null);
+                  deleteMedia(mediaId).catch(() => undefined);
+                }}
+                type="button"
+              >
+                Delete media
+              </button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
     </main>
   );
 }
@@ -1370,11 +1449,11 @@ function PageHeader({
     >
       <div className="page-header-lead">
         <button
-          className="sidebar-toggle"
-          type="button"
-          onClick={onToggleSidebar}
           aria-expanded={isSidebarOpen}
           aria-label="Toggle sidebar"
+          className="sidebar-toggle"
+          onClick={onToggleSidebar}
+          type="button"
         >
           <SidebarIcon aria-hidden="true" size={14} strokeWidth={1.8} />
         </button>
@@ -1382,7 +1461,9 @@ function PageHeader({
       <div className="page-header-main">
         <UserAccountMenu
           firstName={user.name.split(" ")[0] ?? user.name}
-          onLogout={() => void logout()}
+          onLogout={() => {
+            logout().catch(() => undefined);
+          }}
         />
       </div>
       <div className="brand-mark">rdio</div>
@@ -1403,10 +1484,10 @@ function AppSidebar({
 
   return (
     <aside
-      className={isMobileOverlay ? "sidebar is-mobile-overlay" : "sidebar"}
       aria-label="Library"
+      className={isMobileOverlay ? "sidebar is-mobile-overlay" : "sidebar"}
     >
-      <nav className="sidebar-nav" aria-label="Station views">
+      <nav aria-label="Station views" className="sidebar-nav">
         <SidebarButton
           active={activeView === "schedule"}
           icon={CalendarDays}
@@ -1476,8 +1557,8 @@ function SidebarButton({
   return (
     <button
       className={active ? "is-active" : ""}
-      type="button"
       onClick={onClick}
+      type="button"
     >
       <Icon aria-hidden={true} size={14} strokeWidth={1.8} />
       {label}
@@ -1487,7 +1568,7 @@ function SidebarButton({
 
 function StationLoading({ failed }: { failed: boolean }) {
   return (
-    <section className="empty-page" aria-label="Station loading">
+    <section aria-label="Station loading" className="empty-page">
       <p>
         {failed
           ? "Could not connect to the API. Check that the API server is running."
@@ -1507,17 +1588,22 @@ function Modal({
   title: string;
 }) {
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+    <div className="modal-backdrop">
+      <button
+        aria-label="Close modal"
+        className="modal-backdrop-close"
+        onClick={onClose}
+        type="button"
+      />
       <section
         aria-label={title}
         aria-modal="true"
         className="modal-panel"
         role="dialog"
-        onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="modal-header">
           <strong>{title}</strong>
-          <button type="button" onClick={onClose} aria-label="Close modal">
+          <button aria-label="Close modal" onClick={onClose} type="button">
             <X aria-hidden="true" size={15} strokeWidth={1.8} />
           </button>
         </div>
@@ -1529,22 +1615,19 @@ function Modal({
 
 function findMediaIdForFile(
   file: UploadedFileSummary | undefined,
-  mediaItems: MediaItem[],
+  mediaItems: MediaItem[]
 ) {
   if (!file) {
     return null;
   }
 
   const match = mediaItems.find(
-    (item) => item.name === file.name && item.size === file.size,
+    (item) => item.name === file.name && item.size === file.size
   );
   return match?.id ?? null;
 }
 
-function slotPanelTitle(
-  request: CreationRequest | null,
-  editingBlock?: ScheduleBlock,
-) {
+function slotPanelTitle(editingBlock?: ScheduleBlock) {
   if (editingBlock) {
     return "Edit Slot";
   }
@@ -1568,7 +1651,7 @@ function ScheduleSlotPanel({
   const [sheetEntered, setSheetEntered] = useState(false);
 
   useEffect(() => {
-    if (!isMobile || !isOpen) {
+    if (!(isMobile && isOpen)) {
       setSheetEntered(false);
       return;
     }
@@ -1586,25 +1669,25 @@ function ScheduleSlotPanel({
     return (
       <>
         <button
+          aria-label="Close slot editor"
           className={["slot-sheet-backdrop", sheetEntered ? "is-visible" : ""]
             .filter(Boolean)
             .join(" ")}
-          type="button"
-          aria-label="Close slot editor"
           onClick={onClose}
+          type="button"
         />
         <aside
+          aria-label={title}
           className={["slot-editor-sheet", sheetEntered ? "is-open" : ""]
             .filter(Boolean)
             .join(" ")}
-          aria-label={title}
         >
           <div className="slot-editor-header">
             <strong>{title}</strong>
             <button
-              type="button"
-              onClick={onClose}
               aria-label="Close slot editor"
+              onClick={onClose}
+              type="button"
             >
               <X aria-hidden="true" size={15} strokeWidth={1.8} />
             </button>
@@ -1616,10 +1699,10 @@ function ScheduleSlotPanel({
   }
 
   return (
-    <aside className="slot-editor-panel" aria-label={title}>
+    <aside aria-label={title} className="slot-editor-panel">
       <div className="slot-editor-header">
         <strong>{title}</strong>
-        <button type="button" onClick={onClose} aria-label="Close slot editor">
+        <button aria-label="Close slot editor" onClick={onClose} type="button">
           <X aria-hidden="true" size={15} strokeWidth={1.8} />
         </button>
       </div>
@@ -1698,7 +1781,7 @@ function DailyCalendar({
   onUploadMedia: (file: File) => Promise<MediaItem>;
 }) {
   const calendarRef = useRef<HTMLElement>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const lastFocusNowTokenRef = useRef(0);
   const [nowIndicator, setNowIndicator] = useState<{
@@ -1730,7 +1813,7 @@ function DailyCalendar({
     const calendar = calendarRef.current;
     const grid = gridRef.current;
 
-    if (!calendar || !grid) {
+    if (!(calendar && grid)) {
       return;
     }
 
@@ -1746,11 +1829,11 @@ function DailyCalendar({
       if (isToday) {
         const offsetInGrid = getMinutesOffsetInGrid(
           grid,
-          getNowMinutes(new Date(), stationTimeZone),
+          getNowMinutes(new Date(), stationTimeZone)
         );
         scrollRoot.scrollTop = Math.max(
           0,
-          gridTop + offsetInGrid - stickyOffset - 24,
+          gridTop + offsetInGrid - stickyOffset - 24
         );
       } else {
         scrollRoot.scrollTop = Math.max(0, gridTop - stickyOffset);
@@ -1760,12 +1843,12 @@ function DailyCalendar({
     }
 
     scrollRoot.scrollTop = Math.max(0, gridTop - stickyOffset);
-  }, [focusNowToken, isToday, selectedDateKey, stationTimeZone]);
+  }, [focusNowToken, isToday, stationTimeZone]);
 
   useLayoutEffect(() => {
     const grid = gridRef.current;
 
-    if (!grid || !isToday) {
+    if (!(grid && isToday)) {
       setNowIndicator(null);
       return;
     }
@@ -1786,7 +1869,7 @@ function DailyCalendar({
       window.clearInterval(interval);
       window.removeEventListener("resize", tick);
     };
-  }, [blocks, isToday, selectedDateKey, stationTimeZone]);
+  }, [isToday, stationTimeZone]);
 
   return (
     <div
@@ -1797,60 +1880,60 @@ function DailyCalendar({
       }
     >
       <section
+        aria-label="Daily schedule"
         className="calendar-view"
         ref={calendarRef}
-        aria-label="Daily schedule"
       >
         <div className="calendar-sticky">
-          <div className="day-toggle" aria-label="Schedule day">
+          <fieldset aria-label="Schedule day" className="day-toggle">
             <button
-              type="button"
-              onClick={() => onMoveDay(-1)}
               aria-label="Previous day"
+              onClick={() => onMoveDay(-1)}
+              type="button"
             >
               <ChevronLeft aria-hidden="true" size={18} strokeWidth={1.8} />
             </button>
             <div className="date-popover-anchor">
               <button
                 className="date-button"
-                type="button"
                 onClick={onToggleDatePicker}
+                type="button"
               >
                 <span>{formatDayTitle(selectedDate)}</span>
               </button>
               {isDatePickerOpen ? (
                 <DatePickerPopover
                   monthDate={datePickerMonth}
-                  selectedDateKey={selectedDateKey}
                   onChangeMonth={(offset) =>
                     onDatePickerMonthChange(
                       new Date(
                         datePickerMonth.getFullYear(),
                         datePickerMonth.getMonth() + offset,
-                        1,
-                      ),
+                        1
+                      )
                     )
                   }
                   onSelectDate={onSelectDate}
+                  selectedDateKey={selectedDateKey}
                 />
               ) : null}
             </div>
             <button
-              type="button"
-              onClick={() => onMoveDay(1)}
               aria-label="Next day"
+              onClick={() => onMoveDay(1)}
+              type="button"
             >
               <ChevronRight aria-hidden="true" size={18} strokeWidth={1.8} />
             </button>
-          </div>
+          </fieldset>
         </div>
 
-        <div
+        <section
+          aria-label={`${formatDayTitle(selectedDate)} schedule`}
           className="daily-grid"
           ref={gridRef}
-          aria-label={`${formatDayTitle(selectedDate)} schedule`}
         >
-          <div className="time-gutter" aria-hidden="true">
+          <div aria-hidden="true" className="time-gutter">
             {hours.map((hour) => (
               <time
                 className="hour-label"
@@ -1862,24 +1945,11 @@ function DailyCalendar({
               </time>
             ))}
           </div>
-          <div
-            className="schedule-canvas"
-            ref={canvasRef}
-            onDragLeave={(event) => {
-              if (
-                !draggedBlockId ||
-                event.currentTarget.contains(event.relatedTarget as Node)
-              ) {
-                return;
-              }
-
-              onSetDragDropPreview(null);
-            }}
-          >
-            <div className="schedule-lines" aria-hidden="true" />
+          <div className="schedule-canvas" ref={canvasRef} role="application">
+            <div aria-hidden="true" className="schedule-lines" />
             {hours.map((hour) => {
               const hourHasBlock = blocks.some((block) =>
-                blockOverlapsHour(block, hour),
+                blockOverlapsHour(block, hour)
               );
               const isActiveHour =
                 activeRequest?.dateKey === selectedDateKey &&
@@ -1899,14 +1969,9 @@ function DailyCalendar({
                     .join(" ")}
                   data-hour={hour}
                   key={hour}
-                  style={{
-                    top: `${(hour / 24) * 100}%`,
-                    height: `${100 / 24}%`,
-                  }}
-                  type="button"
                   onClick={() => onBeginCreate(hour)}
                   onDragOver={(event) => {
-                    if (!draggedBlockId || !canvasRef.current) {
+                    if (!(draggedBlockId && canvasRef.current)) {
                       return;
                     }
 
@@ -1919,7 +1984,7 @@ function DailyCalendar({
                       blocks,
                       draggedBlockId,
                       canvasRef.current,
-                      event.clientY,
+                      event.clientY
                     );
 
                     if (preview) {
@@ -1929,7 +1994,7 @@ function DailyCalendar({
                   onDrop={(event) => {
                     event.preventDefault();
 
-                    if (!draggedBlockId || !canvasRef.current) {
+                    if (!(draggedBlockId && canvasRef.current)) {
                       return;
                     }
 
@@ -1937,7 +2002,7 @@ function DailyCalendar({
                       blocks,
                       draggedBlockId,
                       canvasRef.current,
-                      event.clientY,
+                      event.clientY
                     );
 
                     if (preview?.canDrop) {
@@ -1947,6 +2012,11 @@ function DailyCalendar({
                     onSetDraggedBlockId(null);
                     onSetDragDropPreview(null);
                   }}
+                  style={{
+                    top: `${(hour / 24) * 100}%`,
+                    height: `${100 / 24}%`,
+                  }}
+                  type="button"
                 >
                   {hourHasBlock ? null : (
                     <span className="slot-hint">Click to add</span>
@@ -1970,56 +2040,46 @@ function DailyCalendar({
             <ScheduleBlocksLayer
               blocks={blocks}
               draggedBlockId={draggedBlockId}
-              selectedBlockId={selectedBlockId}
               onDuplicateBlock={onDuplicateBlock}
               onRemoveBlock={onRemoveBlock}
               onSelectBlock={onSelectBlock}
               onSetDragDropPreview={onSetDragDropPreview}
               onSetDraggedBlockId={onSetDraggedBlockId}
+              selectedBlockId={selectedBlockId}
             />
           </div>
           {isToday && nowIndicator ? (
             <div
+              aria-hidden="true"
               className="calendar-now-indicator"
               style={{ top: `${nowIndicator.top}px` }}
-              aria-hidden="true"
             >
               <time className="calendar-now-label">{nowIndicator.time}</time>
               <div className="calendar-now-line" />
             </div>
           ) : null}
-        </div>
+        </section>
       </section>
 
       <ScheduleSlotPanel
         isMobile={isMobileLayout}
         isOpen={isSlotPanelOpen}
-        title={slotPanelTitle(creationRequest, editingBlock)}
         onClose={onCloseSlotPanel}
+        title={slotPanelTitle(editingBlock)}
       >
         {activeRequest ? (
           <CreationPanel
             className="creation-panel"
             editingBlock={editingBlock}
             hosts={hosts}
+            isLocked={isSelectedBlockLocked}
             key={
               editingBlock?.id ??
               `${activeRequest.dateKey}-${activeRequest.hour}-${activeRequest.kind ?? "pick"}`
             }
             mediaItems={mediaItems}
-            isLocked={isSelectedBlockLocked}
-            programs={programs}
-            request={activeRequest}
             onAddHost={onAddHost}
             onChangeKind={onChangeCreationKind}
-            onSave={(blockInput) => {
-              if (editingBlock) {
-                onUpdateBlock(editingBlock.id, blockInput);
-                return;
-              }
-
-              onSaveBlock(blockInput);
-            }}
             onDelete={
               editingBlock
                 ? () => {
@@ -2028,7 +2088,17 @@ function DailyCalendar({
                   }
                 : undefined
             }
+            onSave={(blockInput) => {
+              if (editingBlock) {
+                onUpdateBlock(editingBlock.id, blockInput);
+                return;
+              }
+
+              onSaveBlock(blockInput);
+            }}
             onUploadMedia={onUploadMedia}
+            programs={programs}
+            request={activeRequest}
           />
         ) : null}
       </ScheduleSlotPanel>
@@ -2053,24 +2123,24 @@ function DatePickerPopover({
     <div className="date-picker-popover">
       <div className="date-picker-header">
         <button
-          type="button"
-          onClick={() => onChangeMonth(-1)}
           aria-label="Previous month"
+          onClick={() => onChangeMonth(-1)}
+          type="button"
         >
           <ChevronLeft aria-hidden="true" size={15} strokeWidth={1.8} />
         </button>
         <strong>{formatMonthLabel(monthDate)}</strong>
         <button
-          type="button"
-          onClick={() => onChangeMonth(1)}
           aria-label="Next month"
+          onClick={() => onChangeMonth(1)}
+          type="button"
         >
           <ChevronRight aria-hidden="true" size={15} strokeWidth={1.8} />
         </button>
       </div>
-      <div className="date-picker-weekdays" aria-hidden="true">
-        {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
-          <span key={`${day}-${index}`}>{day}</span>
+      <div aria-hidden="true" className="date-picker-weekdays">
+        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+          <span key={day}>{day.slice(0, 1)}</span>
         ))}
       </div>
       <div className="date-picker-grid">
@@ -2088,8 +2158,8 @@ function DatePickerPopover({
                 .filter(Boolean)
                 .join(" ")}
               key={dayKey}
-              type="button"
               onClick={() => onSelectDate(day)}
+              type="button"
             >
               {day.getDate()}
             </button>
@@ -2135,33 +2205,33 @@ function CreationPanel({
   const [slotKind, setSlotKind] = useState<ScheduleBlock["kind"]>(initialKind);
   const [title, setTitle] = useState(
     editingBlock?.title ??
-      (initialKind === "broadcast" ? "Live Broadcast" : "New Recording"),
+      (initialKind === "broadcast" ? "Live Broadcast" : "New Recording")
   );
   const [description, setDescription] = useState(
-    editingBlock?.description ?? "",
+    editingBlock?.description ?? ""
   );
   const [startTime, setStartTime] = useState(
-    minutesToTimeInput(editingBlock?.startMinutes ?? defaultStartMinutes),
+    minutesToTimeInput(editingBlock?.startMinutes ?? defaultStartMinutes)
   );
   const [endTime, setEndTime] = useState(
-    minutesToTimeInput(editingBlock?.endMinutes ?? defaultEndMinutes),
+    minutesToTimeInput(editingBlock?.endMinutes ?? defaultEndMinutes)
   );
   const [selectedHosts, setSelectedHosts] = useState<string[]>(
-    editingBlock?.hosts ?? [],
+    editingBlock?.hosts ?? []
   );
   const [selectedProgramId, setSelectedProgramId] = useState(
-    editingBlock?.programId ?? "",
+    editingBlock?.programId ?? ""
   );
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(
-    initialMediaId,
+    initialMediaId
   );
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaDuration, setMediaDuration] = useState<number | undefined>(
-    editingBlock?.file?.duration,
+    editingBlock?.file?.duration
   );
   const [saveError, setSaveError] = useState("");
   const selectedProgram = programs.find(
-    (program) => program.id === selectedProgramId,
+    (program) => program.id === selectedProgramId
   );
   const appliedProgramIdRef = useRef(editingBlock?.programId ?? "");
 
@@ -2181,10 +2251,14 @@ function CreationPanel({
     let cancelled = false;
     loadAudioDuration(mediaUrl(item.url))
       .then((d) => {
-        if (!cancelled) setMediaDuration(d);
+        if (!cancelled) {
+          setMediaDuration(d);
+        }
       })
       .catch(() => {
-        if (!cancelled) setMediaDuration(undefined);
+        if (!cancelled) {
+          setMediaDuration(undefined);
+        }
       });
     return () => {
       cancelled = true;
@@ -2207,10 +2281,14 @@ function CreationPanel({
 
     loadAudioDuration(objectUrl)
       .then((d) => {
-        if (!cancelled) setMediaDuration(d);
+        if (!cancelled) {
+          setMediaDuration(d);
+        }
       })
       .catch(() => {
-        if (!cancelled) setMediaDuration(undefined);
+        if (!cancelled) {
+          setMediaDuration(undefined);
+        }
       })
       .finally(() => URL.revokeObjectURL(objectUrl));
 
@@ -2271,14 +2349,14 @@ function CreationPanel({
       selectedAudioItem?.type === "audio" ||
       Boolean(
         editingBlock?.mediaId &&
-        editingBlock.file &&
-        !mediaFile &&
-        !selectedMediaId,
+          editingBlock.file &&
+          !mediaFile &&
+          !selectedMediaId
       ));
   const playbackNotice = hasAudioSelection
     ? mediaPlaybackNotice(
         slotDurationSeconds(startTime, endTime),
-        mediaDuration,
+        mediaDuration
       )
     : null;
 
@@ -2330,7 +2408,7 @@ function CreationPanel({
         event.preventDefault();
         setSaveError("");
 
-        void (async () => {
+        const saveSlot = async () => {
           try {
             const startMinutes = timeInputToMinutes(startTime);
             const rawEndMinutes = timeInputToMinutes(endTime);
@@ -2370,7 +2448,9 @@ function CreationPanel({
           } catch {
             setSaveError("Could not save slot. Please try again.");
           }
-        })();
+        };
+
+        saveSlot().catch(() => undefined);
       }}
     >
       <div className="creation-form-body">
@@ -2380,11 +2460,11 @@ function CreationPanel({
             <button
               className={kind === "recording" ? "is-selected" : ""}
               disabled={isLocked}
-              type="button"
               onClick={() => {
                 setSlotKind("recording");
                 onChangeKind("recording");
               }}
+              type="button"
             >
               <ListMusic aria-hidden="true" size={14} strokeWidth={1.8} />
               Recording
@@ -2392,44 +2472,44 @@ function CreationPanel({
             <button
               className={kind === "broadcast" ? "is-selected" : ""}
               disabled={isLocked}
-              type="button"
               onClick={() => {
                 setSlotKind("broadcast");
                 onChangeKind("broadcast");
               }}
+              type="button"
             >
               <Mic2 aria-hidden="true" size={14} strokeWidth={1.8} />
               Broadcast
             </button>
           </div>
         </fieldset>
-        {!selectedProgramId ? (
+        {selectedProgramId ? null : (
           <label>
             <span>Title</span>
             <input
               disabled={isLocked}
-              value={title}
               onChange={(event) => setTitle(event.target.value)}
+              value={title}
             />
           </label>
-        ) : null}
+        )}
         <div className="creation-form-times">
           <label>
             <span>Start time</span>
             <input
               disabled={isLocked}
+              onChange={(event) => setStartTime(event.target.value)}
               type="time"
               value={startTime}
-              onChange={(event) => setStartTime(event.target.value)}
             />
           </label>
           <label>
             <span>End time</span>
             <input
               disabled={isLocked}
+              onChange={(event) => setEndTime(event.target.value)}
               type="time"
               value={endTime}
-              onChange={(event) => setEndTime(event.target.value)}
             />
           </label>
         </div>
@@ -2437,10 +2517,6 @@ function CreationPanel({
           <MediaSlotField
             disabled={isLocked}
             mediaItems={mediaItems}
-            playbackNotice={playbackNotice}
-            selectedMediaId={selectedMediaId}
-            uploadFile={mediaFile}
-            onSelectMedia={setSelectedMediaId}
             onChangeUploadFile={(nextFile) => {
               setMediaFile(nextFile);
 
@@ -2452,34 +2528,38 @@ function CreationPanel({
                 setTitle(nextFile.name);
               }
             }}
+            onSelectMedia={setSelectedMediaId}
+            playbackNotice={playbackNotice}
+            selectedMediaId={selectedMediaId}
+            uploadFile={mediaFile}
           />
         ) : null}
         <hr className="creation-form-divider" />
         <ProgramSearchSelect
           disabled={isLocked}
+          onSelect={setSelectedProgramId}
           options={programs.map((program) => ({
             id: program.id,
             title: program.title,
           }))}
           selectedId={selectedProgramId}
-          onSelect={setSelectedProgramId}
         />
         <MultiSelect
+          createPlaceholder="New host name"
+          disabled={isLocked}
           label="Host"
+          onChange={setSelectedHosts}
+          onCreateOption={isLocked ? undefined : onAddHost}
           options={hosts}
           placeholder="Select hosts"
           value={selectedHosts}
-          disabled={isLocked}
-          onChange={setSelectedHosts}
-          onCreateOption={isLocked ? undefined : onAddHost}
-          createPlaceholder="New host name"
         />
         <label>
           <span>Description</span>
           <textarea
             disabled={isLocked}
-            value={description}
             onChange={(event) => setDescription(event.target.value)}
+            value={description}
           />
         </label>
       </div>
@@ -2492,19 +2572,19 @@ function CreationPanel({
         {isEditing && onDelete ? (
           <button
             className="form-actions-delete"
-            type="button"
             onClick={onDelete}
+            type="button"
           >
             Delete
           </button>
         ) : null}
-        {!isLocked ? (
+        {isLocked ? null : (
           <div className="form-actions-end">
             <button className="primary-action" type="submit">
               {editingBlock ? "Update" : "Save"}
             </button>
           </div>
-        ) : null}
+        )}
       </div>
     </form>
   );
@@ -2531,13 +2611,13 @@ function ScheduleBlocksLayer({
 }) {
   return (
     <div
+      aria-hidden={blocks.length === 0}
       className={[
         "schedule-blocks-layer",
         draggedBlockId ? "is-reordering" : "",
       ]
         .filter(Boolean)
         .join(" ")}
-      aria-hidden={blocks.length === 0}
     >
       <div className="schedule-blocks-lane">
         {blocks.map((block) => {
@@ -2546,8 +2626,7 @@ function ScheduleBlocksLayer({
           const height =
             (Math.max(
               1,
-              Math.min(1440, block.endMinutes) -
-                Math.max(0, block.startMinutes),
+              Math.min(1440, block.endMinutes) - Math.max(0, block.startMinutes)
             ) /
               1440) *
             100;
@@ -2559,12 +2638,12 @@ function ScheduleBlocksLayer({
               isSelected={selectedBlockId === block.id}
               key={block.id}
               layout={{ top: `${top}%`, height: `${height}%` }}
-              onDuplicate={() => onDuplicateBlock(block.id)}
               onDragEnd={() => {
                 onSetDraggedBlockId(null);
                 onSetDragDropPreview(null);
               }}
               onDragStart={() => onSetDraggedBlockId(block.id)}
+              onDuplicate={() => onDuplicateBlock(block.id)}
               onRemove={() => onRemoveBlock(block.id)}
               onSelect={() => onSelectBlock(block.id)}
             />
@@ -2613,51 +2692,57 @@ function ScheduleBlockCard({
       ]
         .filter(Boolean)
         .join(" ")}
-      draggable
-      onClick={(event) => {
-        event.stopPropagation();
-        onSelect();
-      }}
-      onDoubleClick={(event) => {
-        event.stopPropagation();
-        onSelect();
-      }}
-      onDragEnd={onDragEnd}
-      onDragStart={(event) => {
-        event.dataTransfer.effectAllowed = "move";
-        onDragStart();
-      }}
       style={layout}
     >
-      <button className="block-handle" type="button" aria-label="Drag block">
-        <GripVertical aria-hidden="true" size={16} strokeWidth={1.8} />
+      <button
+        aria-label={`Select ${block.title}`}
+        className="schedule-block-select"
+        draggable
+        onClick={(event) => {
+          event.stopPropagation();
+          onSelect();
+        }}
+        onDoubleClick={(event) => {
+          event.stopPropagation();
+          onSelect();
+        }}
+        onDragEnd={onDragEnd}
+        onDragStart={(event) => {
+          event.dataTransfer.effectAllowed = "move";
+          onDragStart();
+        }}
+        type="button"
+      >
+        <span aria-hidden="true" className="block-handle">
+          <GripVertical aria-hidden="true" size={16} strokeWidth={1.8} />
+        </span>
+        <span className="block-copy">
+          <strong>
+            <Icon aria-hidden="true" size={12} strokeWidth={1.8} />
+            {block.title}
+          </strong>
+          {metaParts.length > 0 ? <span>{metaParts.join(" · ")}</span> : null}
+        </span>
       </button>
-      <div className="block-copy">
-        <strong>
-          <Icon aria-hidden="true" size={12} strokeWidth={1.8} />
-          {block.title}
-        </strong>
-        {metaParts.length > 0 ? <span>{metaParts.join(" · ")}</span> : null}
-      </div>
       {isSelected ? (
         <div className="block-actions">
           <button
-            type="button"
+            aria-label="Duplicate block"
             onClick={(event) => {
               event.stopPropagation();
               onDuplicate();
             }}
-            aria-label="Duplicate block"
+            type="button"
           >
             <Copy aria-hidden="true" size={14} strokeWidth={1.8} />
           </button>
           <button
-            type="button"
+            aria-label="Remove block"
             onClick={(event) => {
               event.stopPropagation();
               onRemove();
             }}
-            aria-label="Remove block"
+            type="button"
           >
             <Trash2 aria-hidden="true" size={14} strokeWidth={1.8} />
           </button>
@@ -2688,7 +2773,7 @@ function ProgramsPage({
   const [description, setDescription] = useState("");
   const hostNames = getHostNames(hosts);
   const [host, setHost] = useState<string[]>(
-    hostNames[0] ? [hostNames[0]] : [],
+    hostNames[0] ? [hostNames[0]] : []
   );
 
   const openCreateModal = () => {
@@ -2730,7 +2815,7 @@ function ProgramsPage({
     const normalizedDescription = description.trim();
     const selectedHost = host[0]?.trim();
 
-    if (!normalizedTitle || !selectedHost) {
+    if (!(normalizedTitle && selectedHost)) {
       return;
     }
 
@@ -2750,21 +2835,21 @@ function ProgramsPage({
   };
 
   return (
-    <section className="library-view" aria-label="Programs">
+    <section aria-label="Programs" className="library-view">
       <div className="library-header">
         <div>
           <BookOpen aria-hidden="true" size={18} strokeWidth={1.8} />
           <strong>Programs</strong>
         </div>
-        <button type="button" onClick={openCreateModal}>
+        <button onClick={openCreateModal} type="button">
           <Plus aria-hidden="true" size={15} strokeWidth={1.8} />
           New program
         </button>
       </div>
       {isModalOpen ? (
         <Modal
-          title={editingProgramId ? "Edit program" : "New program"}
           onClose={closeModal}
+          title={editingProgramId ? "Edit program" : "New program"}
         >
           <form
             className="program-create-form"
@@ -2776,26 +2861,26 @@ function ProgramsPage({
             <label>
               <span>Program</span>
               <input
-                value={title}
                 onChange={(event) => setTitle(event.target.value)}
+                value={title}
               />
             </label>
             <label>
               <span>Description</span>
               <textarea
-                value={description}
                 onChange={(event) => setDescription(event.target.value)}
+                value={description}
               />
             </label>
             <MultiSelect
+              createPlaceholder="New host name"
               label="Host"
               multiple={false}
+              onChange={setHost}
+              onCreateOption={onAddHost}
               options={hostNames}
               placeholder="Select host"
               value={host}
-              onChange={setHost}
-              onCreateOption={onAddHost}
-              createPlaceholder="New host name"
             />
             <div className="form-actions">
               <button className="primary-action" type="submit">
@@ -2824,8 +2909,8 @@ function ProgramsPage({
                     {program.description ? (
                       <>
                         <span
-                          className="program-row-meta-sep"
                           aria-hidden="true"
+                          className="program-row-meta-sep"
                         >
                           ·
                         </span>
@@ -2839,16 +2924,16 @@ function ProgramsPage({
               </div>
               <div className="library-actions">
                 <button
-                  type="button"
-                  onClick={() => openEditModal(program)}
                   aria-label={`Edit ${program.title}`}
+                  onClick={() => openEditModal(program)}
+                  type="button"
                 >
                   <Settings aria-hidden="true" size={14} strokeWidth={1.8} />
                 </button>
                 <button
-                  type="button"
-                  onClick={() => onDeleteProgram(program.id)}
                   aria-label={`Delete ${program.title}`}
+                  onClick={() => onDeleteProgram(program.id)}
+                  type="button"
                 >
                   <Trash2 aria-hidden="true" size={14} strokeWidth={1.8} />
                 </button>
@@ -2879,7 +2964,7 @@ function MediaPage({
   const [isUploading, setIsUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const visibleItems = mediaItems.filter(
-    (item) => filter === "all" || item.type === filter,
+    (item) => filter === "all" || item.type === filter
   );
 
   const uploadMedia = async () => {
@@ -2902,49 +2987,49 @@ function MediaPage({
   };
 
   return (
-    <section className="library-view" aria-label="Media">
+    <section aria-label="Media" className="library-view">
       <div className="library-header">
         <div>
           <ListMusic aria-hidden="true" size={18} strokeWidth={1.8} />
           <strong>Media</strong>
         </div>
-        <button type="button" onClick={() => setIsModalOpen(true)}>
+        <button onClick={() => setIsModalOpen(true)} type="button">
           <Plus aria-hidden="true" size={15} strokeWidth={1.8} />
           Upload media
         </button>
       </div>
-      <div className="library-tabs" aria-label="Media type">
+      <fieldset aria-label="Media type" className="library-tabs">
         <button
           className={filter === "all" ? "is-active" : ""}
-          type="button"
           onClick={() => onChangeFilter("all")}
+          type="button"
         >
           All
         </button>
         <button
           className={filter === "audio" ? "is-active" : ""}
-          type="button"
           onClick={() => onChangeFilter("audio")}
+          type="button"
         >
           Audio
         </button>
         <button
           className={filter === "image" ? "is-active" : ""}
-          type="button"
           onClick={() => onChangeFilter("image")}
+          type="button"
         >
           Images
         </button>
-      </div>
+      </fieldset>
       {!isModalOpen && error ? <p className="form-error">{error}</p> : null}
       {isModalOpen ? (
         <Modal
-          title="Upload media"
           onClose={() => {
             setIsModalOpen(false);
             setSelectedFile(null);
             setError("");
           }}
+          title="Upload media"
         >
           <form
             className="media-upload-form"
@@ -2999,14 +3084,14 @@ function MediaPage({
             </div>
             <div className="library-actions">
               <button
-                type="button"
+                aria-label={`Delete ${item.name}`}
                 onClick={() => {
                   setError("");
-                  void onDeleteMedia(item.id).catch(() =>
-                    setError("Delete failed. Please try again."),
+                  onDeleteMedia(item.id).catch(() =>
+                    setError("Delete failed. Please try again.")
                   );
                 }}
-                aria-label={`Delete ${item.name}`}
+                type="button"
               >
                 <Trash2 aria-hidden="true" size={14} strokeWidth={1.8} />
               </button>
@@ -3022,7 +3107,7 @@ function BroadcastPage({ station }: { station: StationSummary }) {
   const [isConnected, setIsConnected] = useState(false);
   const [broadcastSettings, setBroadcastSettings] =
     useState<BroadcastIcecastSettings | null>(() =>
-      broadcastCredentialsFromStation(station),
+      broadcastCredentialsFromStation(station)
     );
   const [settingsError, setSettingsError] = useState("");
   const icecast = broadcastSettings ?? station.broadcastIcecast;
@@ -3041,9 +3126,11 @@ function BroadcastPage({ station }: { station: StationSummary }) {
       } catch {
         /* ignore */
       }
-      if (!cancelled) setTimeout(poll, 3000);
+      if (!cancelled) {
+        setTimeout(poll, 3000);
+      }
     }
-    void poll();
+    poll().catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -3056,16 +3143,16 @@ function BroadcastPage({ station }: { station: StationSummary }) {
       try {
         const res = await apiFetch(`${apiBaseUrl}/broadcast/settings`);
         if (res.status === 404) {
-          if (!cancelled && !broadcastCredentialsFromStation(station)) {
+          if (!(cancelled || broadcastCredentialsFromStation(station))) {
             setSettingsError(
-              "Broadcast credentials are unavailable. Redeploy the API.",
+              "Broadcast credentials are unavailable. Redeploy the API."
             );
           }
           return;
         }
         if (!res.ok) {
           throw new Error(
-            `Broadcast settings request failed with ${res.status}`,
+            `Broadcast settings request failed with ${res.status}`
           );
         }
         const data = (await res.json()) as {
@@ -3077,15 +3164,15 @@ function BroadcastPage({ station }: { station: StationSummary }) {
           setSettingsError("");
         }
       } catch {
-        if (!cancelled && !broadcastCredentialsFromStation(station)) {
+        if (!(cancelled || broadcastCredentialsFromStation(station))) {
           setSettingsError(
-            "Broadcast credentials are unavailable. Sign in again or check the API deployment.",
+            "Broadcast credentials are unavailable. Sign in again or check the API deployment."
           );
         }
       }
     }
 
-    void loadBroadcastSettings();
+    loadBroadcastSettings().catch(() => undefined);
 
     return () => {
       cancelled = true;
@@ -3093,7 +3180,7 @@ function BroadcastPage({ station }: { station: StationSummary }) {
   }, [station]);
 
   return (
-    <section className="broadcast-view" aria-label="Broadcast">
+    <section aria-label="Broadcast" className="broadcast-view">
       <div className="library-header">
         <div>
           <Radio aria-hidden="true" size={18} strokeWidth={1.8} />
@@ -3102,12 +3189,12 @@ function BroadcastPage({ station }: { station: StationSummary }) {
       </div>
       <div className="broadcast-console">
         <section
-          className="broadcast-status-panel"
           aria-label="Broadcast source status"
+          className="broadcast-status-panel"
         >
           <div
-            className={isConnected ? "source-light is-on" : "source-light"}
             aria-hidden="true"
+            className={isConnected ? "source-light is-on" : "source-light"}
           />
           <div>
             <strong>
@@ -3120,7 +3207,7 @@ function BroadcastPage({ station }: { station: StationSummary }) {
             </span>
           </div>
         </section>
-        <section className="broadcast-settings" aria-label="BUTT settings">
+        <section aria-label="BUTT settings" className="broadcast-settings">
           {settingsError ? <p className="form-error">{settingsError}</p> : null}
           <div className="settings-list">
             <SettingsRow label="Application" value="BUTT" />
@@ -3144,17 +3231,10 @@ function BroadcastPage({ station }: { station: StationSummary }) {
 }
 
 function StationSettings({ station }: { station: StationSummary }) {
-  const fallbackDetail =
-    station.fallbackSource.kind === "playlist"
-      ? station.fallbackSource.playlistId
-      : station.fallbackSource.kind === "track"
-        ? station.fallbackSource.trackId
-        : station.fallbackSource.kind === "live"
-          ? station.fallbackSource.inputId
-          : "default";
+  const fallbackDetail = fallbackSourceDetail(station.fallbackSource);
 
   return (
-    <section className="settings-view" aria-label={`${station.name} settings`}>
+    <section aria-label={`${station.name} settings`} className="settings-view">
       <div className="settings-list">
         <SettingsRow label="Name" value={station.name} />
         <SettingsRow label="Station ID" value={station.id} />
@@ -3167,14 +3247,46 @@ function StationSettings({ station }: { station: StationSummary }) {
           value={station.fallbackSource.kind}
         />
         <SettingsRow label="Fallback source" value={fallbackDetail} />
-        <SettingsLink label="API" href={apiBaseUrl} />
+        <SettingsLink href={apiBaseUrl} label="API" />
         <SettingsLink
-          label="Icecast"
           href={`http://${station.icecast.host}:${station.icecast.port}`}
+          label="Icecast"
         />
       </div>
     </section>
   );
+}
+
+function scheduleSaveStateMessage(
+  scheduleSaveState: "idle" | "saving" | "saved"
+) {
+  if (scheduleSaveState === "saving") {
+    return "Saving schedule...";
+  }
+
+  if (scheduleSaveState === "saved") {
+    return "Schedule saved";
+  }
+
+  return "";
+}
+
+function fallbackSourceDetail(
+  fallbackSource: StationSummary["fallbackSource"]
+) {
+  if (fallbackSource.kind === "playlist") {
+    return fallbackSource.playlistId;
+  }
+
+  if (fallbackSource.kind === "track") {
+    return fallbackSource.trackId;
+  }
+
+  if (fallbackSource.kind === "live") {
+    return fallbackSource.inputId;
+  }
+
+  return "default";
 }
 
 function SettingsRow({ label, value }: { label: string; value: string }) {
@@ -3195,8 +3307,22 @@ function SettingsLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-createRoot(document.getElementById("root")!).render(
+const rootElement = document.getElementById("root");
+
+if (!rootElement) {
+  throw new Error("Root element was not found.");
+}
+
+const existingRoot = (
+  rootElement as Element & { _reactRoot?: ReturnType<typeof createRoot> }
+)._reactRoot;
+const root = existingRoot ?? createRoot(rootElement);
+(
+  rootElement as Element & { _reactRoot?: ReturnType<typeof createRoot> }
+)._reactRoot = root;
+
+root.render(
   <AuthGate>
     <App />
-  </AuthGate>,
+  </AuthGate>
 );

@@ -1,67 +1,56 @@
-import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
+import { db, programs } from "@rdio/db";
+import { eq } from "drizzle-orm";
+import type { FastifyInstance } from "fastify";
 import {
-  isRecord,
-  parseJsonBody,
-  type Program,
   readAllScheduleBlocks,
-  readPrograms,
   scheduleVersion,
   writeAllScheduleBlocks,
-  writePrograms,
 } from "../lib/station-store.js";
+import { validateJsonBody, validateParams } from "../lib/validation.js";
+import { idParamsSchema, programBodySchema } from "../schemas/api.js";
 
-export async function programRoutes(server: FastifyInstance) {
-  server.get("/", async () => ({ programs: await readPrograms() }));
+export function programRoutes(server: FastifyInstance) {
+  server.get("/", async () => ({ programs: await db.select().from(programs) }));
 
   server.post("/", async (request, reply) => {
-    const body = parseJsonBody(request.body);
-    if (
-      !isRecord(body) ||
-      typeof body.title !== "string" ||
-      typeof body.description !== "string" ||
-      typeof body.host !== "string"
-    ) {
-      return reply
-        .status(400)
-        .send({ error: "title, description, and host are required" });
+    const body = validateJsonBody(reply, programBodySchema, request.body);
+    if (!body) {
+      return;
     }
-    const program: Program = {
+
+    const program = {
       id: randomUUID(),
       title: body.title,
       description: body.description,
       host: body.host,
     };
-    const programs = await readPrograms();
-    await writePrograms([...programs, program]);
+    await db.insert(programs).values(program);
     return reply.status(201).send({ program });
   });
 
   server.put<{ Params: { id: string } }>("/:id", async (request, reply) => {
-    const { id } = request.params;
-    const body = parseJsonBody(request.body);
-    if (
-      !isRecord(body) ||
-      typeof body.title !== "string" ||
-      typeof body.description !== "string" ||
-      typeof body.host !== "string"
-    ) {
-      return reply
-        .status(400)
-        .send({ error: "title, description, and host are required" });
+    const params = validateParams(reply, idParamsSchema, request.params);
+    const body = validateJsonBody(reply, programBodySchema, request.body);
+    if (!(params && body)) {
+      return;
     }
-    const programs = await readPrograms();
-    const index = programs.findIndex((program) => program.id === id);
-    if (index === -1)
+
+    const { id } = params;
+    const existing = await db
+      .select()
+      .from(programs)
+      .where(eq(programs.id, id));
+    if (existing.length === 0) {
       return reply.status(404).send({ error: "Program not found" });
-    const program: Program = {
+    }
+    const program = {
       id,
       title: body.title,
       description: body.description,
       host: body.host,
     };
-    programs[index] = program;
-    await writePrograms(programs);
+    await db.update(programs).set(program).where(eq(programs.id, id));
     const blocks = await readAllScheduleBlocks();
     const updatedBlocks = blocks.map((block) =>
       block.programId === id
@@ -71,19 +60,23 @@ export async function programRoutes(server: FastifyInstance) {
             description: program.description,
             hosts: [program.host],
           }
-        : block,
+        : block
     );
     await writeAllScheduleBlocks(updatedBlocks);
     return { program, blocks: updatedBlocks, version: await scheduleVersion() };
   });
 
-  server.delete<{ Params: { id: string } }>("/:id", async (request) => {
-    const { id } = request.params;
-    const programs = await readPrograms();
-    await writePrograms(programs.filter((program) => program.id !== id));
+  server.delete<{ Params: { id: string } }>("/:id", async (request, reply) => {
+    const params = validateParams(reply, idParamsSchema, request.params);
+    if (!params) {
+      return;
+    }
+
+    const { id } = params;
+    await db.delete(programs).where(eq(programs.id, id));
     const blocks = await readAllScheduleBlocks();
     const updatedBlocks = blocks.map((block) =>
-      block.programId === id ? { ...block, programId: undefined } : block,
+      block.programId === id ? { ...block, programId: undefined } : block
     );
     await writeAllScheduleBlocks(updatedBlocks);
     return { blocks: updatedBlocks, version: await scheduleVersion() };

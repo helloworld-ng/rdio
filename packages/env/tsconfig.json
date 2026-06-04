@@ -1,11 +1,10 @@
 {
   "extends": "@rdio/tsconfig/node.json",
-  "include": [
-    "src"
-  ],
+  "include": ["src"],
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "noEmit": false
+    "noEmit": false,
+    "strictNullChecks": true
   }
 }

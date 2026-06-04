@@ -3,9 +3,7 @@
   "compilerOptions": {
     "target": "ES2022",
     "useDefineForClassFields": true,
-    "lib": [
-      "ES2022"
-    ],
+    "lib": ["ES2022"],
     "allowJs": false,
     "skipLibCheck": true,
     "esModuleInterop": true,

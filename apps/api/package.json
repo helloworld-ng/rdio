@@ -13,9 +13,12 @@
     "@fastify/cors": "^11.2.0",
     "@rdio/auth": "workspace:*",
     "@rdio/config": "workspace:*",
+    "@rdio/db": "workspace:*",
     "@rdio/env": "workspace:*",
     "@rdio/rdio-core": "workspace:*",
-    "fastify": "^5.1.0"
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.1.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@rdio/tsconfig": "workspace:*",

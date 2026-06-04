@@ -1,9 +1,8 @@
 {
   "extends": "@rdio/tsconfig/react-app.json",
   "compilerOptions": {
-    "noEmit": true
+    "noEmit": true,
+    "strictNullChecks": true
   },
-  "include": [
-    "src"
-  ]
+  "include": ["src"]
 }

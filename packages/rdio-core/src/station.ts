@@ -1,40 +1,55 @@
-import { detectScheduleConflicts, getCurrentProgram, getUpcomingPrograms } from './schedule.js'
-import type { RadioStation, RadioStationInput, ScheduleSnapshot } from './types.js'
+import {
+  detectScheduleConflicts,
+  getCurrentProgram,
+  getUpcomingPrograms,
+} from "./schedule.js";
+import type {
+  RadioStation,
+  RadioStationInput,
+  ScheduleSnapshot,
+} from "./types.js";
 
 export function defineStation(input: RadioStationInput): RadioStation {
-  const slug = input.slug ?? input.id
-  const stationId = input.id
-  const mount = input.mount ?? `/${slug}.mp3`
+  const slug = input.slug ?? input.id;
+  const stationId = input.id;
+  const mount = input.mount ?? `/${slug}.mp3`;
 
   return {
     id: stationId,
     name: input.name,
     slug,
-    timezone: input.timezone ?? 'UTC',
+    timezone: input.timezone ?? "UTC",
     mount,
     streamUrl: input.streamUrl ?? mount,
-    fallbackSource: input.fallbackSource ?? { kind: 'fallback' },
+    fallbackSource: input.fallbackSource ?? { kind: "fallback" },
     schedule: (input.schedule ?? []).map((slot) => ({
       ...slot,
       stationId: slot.stationId ?? stationId,
     })),
-  }
+  };
 }
 
 export function listStations(stations: RadioStation[]): RadioStation[] {
-  return [...stations].sort((a, b) => a.name.localeCompare(b.name))
+  return [...stations].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function findStation(stations: RadioStation[], stationId: string): RadioStation | null {
-  return stations.find((station) => station.id === stationId || station.slug === stationId) ?? null
+export function findStation(
+  stations: RadioStation[],
+  stationId: string
+): RadioStation | null {
+  return (
+    stations.find(
+      (station) => station.id === stationId || station.slug === stationId
+    ) ?? null
+  );
 }
 
 export function getStationScheduleSnapshot(
   station: RadioStation,
   at: Date,
-  options: { upcomingLimit?: number } = {},
+  options: { upcomingLimit?: number } = {}
 ): ScheduleSnapshot {
-  const upcomingLimit = options.upcomingLimit ?? 10
+  const upcomingLimit = options.upcomingLimit ?? 10;
 
   return {
     stationId: station.id,
@@ -42,5 +57,5 @@ export function getStationScheduleSnapshot(
     currentProgram: getCurrentProgram(station.schedule, at),
     upcomingPrograms: getUpcomingPrograms(station.schedule, at, upcomingLimit),
     conflicts: detectScheduleConflicts(station.schedule),
-  }
+  };
 }

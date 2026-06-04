@@ -1,1 +1,1 @@
-export const mockAnchorDate = new Date(2026, 4, 25)
+export const mockAnchorDate = new Date(2026, 4, 25);

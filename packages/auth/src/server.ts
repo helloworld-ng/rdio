@@ -1,22 +1,29 @@
-import { db, hasUsers, markPasswordChanged } from '@rdio/db'
-import * as schema from '@rdio/db/schema'
-import { env, webOrigins } from '@rdio/env/server'
-import { betterAuth } from 'better-auth'
-import { drizzleAdapter } from 'better-auth/adapters/drizzle'
-import { APIError, createAuthMiddleware } from 'better-auth/api'
-import { fromNodeHeaders } from 'better-auth/node'
-import { admin } from 'better-auth/plugins'
-import type { IncomingHttpHeaders } from 'node:http'
+import type { IncomingHttpHeaders } from "node:http";
+import { db, hasUsers, markPasswordChanged } from "@rdio/db";
+import { account, session, user, verification } from "@rdio/db/schema";
+import { env, webOrigins } from "@rdio/env/server";
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { APIError, createAuthMiddleware } from "better-auth/api";
+import { fromNodeHeaders } from "better-auth/node";
+import { admin } from "better-auth/plugins";
 
 /** Reports whether the initial administrator has already completed application setup. */
 export async function isSetupComplete() {
-  return hasUsers()
+  return await hasUsers();
 }
+
+const authSchema = {
+  account,
+  session,
+  user,
+  verification,
+};
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
-    provider: 'pg',
-    schema,
+    provider: "pg",
+    schema: authSchema,
   }),
   trustedOrigins: webOrigins,
   emailAndPassword: {
@@ -25,7 +32,7 @@ export const auth = betterAuth({
   user: {
     additionalFields: {
       mustChangePassword: {
-        type: 'boolean',
+        type: "boolean",
         defaultValue: false,
         input: false,
       },
@@ -33,13 +40,14 @@ export const auth = betterAuth({
   },
   hooks: {
     before: createAuthMiddleware(async (context) => {
-      if (context.path !== '/sign-up/email' || !(await isSetupComplete())) {
-        return
+      if (context.path !== "/sign-up/email" || !(await isSetupComplete())) {
+        return;
       }
 
-      throw new APIError('FORBIDDEN', {
-        message: 'Signup is disabled. Ask an administrator to create your account.',
-      })
+      throw new APIError("FORBIDDEN", {
+        message:
+          "Signup is disabled. Ask an administrator to create your account.",
+      });
     }),
   },
   databaseHooks: {
@@ -47,15 +55,15 @@ export const auth = betterAuth({
       create: {
         before: async (newUser) => {
           if (await isSetupComplete()) {
-            return
+            return;
           }
 
           return {
             data: {
               ...newUser,
-              role: 'admin',
+              role: "admin",
             },
-          }
+          };
         },
       },
     },
@@ -63,18 +71,18 @@ export const auth = betterAuth({
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
   plugins: [admin()],
-})
+});
 
 /** Converts Node request headers into the Web Headers shape Better Auth expects. */
 export function authHeaders(headers: IncomingHttpHeaders) {
-  return fromNodeHeaders(headers)
+  return fromNodeHeaders(headers);
 }
 
 /** Resolves the Better Auth session associated with a Node request. */
 export function getSession(headers: IncomingHttpHeaders) {
   return auth.api.getSession({
     headers: authHeaders(headers),
-  })
+  });
 }
 
 /** Changes a temporary password and clears the user's forced-change marker. */
@@ -82,7 +90,7 @@ export async function changeTemporaryPassword(
   headers: IncomingHttpHeaders,
   userId: string,
   currentPassword: string,
-  newPassword: string,
+  newPassword: string
 ) {
   await auth.api.changePassword({
     body: {
@@ -91,8 +99,8 @@ export async function changeTemporaryPassword(
       revokeOtherSessions: false,
     },
     headers: authHeaders(headers),
-  })
-  await markPasswordChanged(userId)
+  });
+  await markPasswordChanged(userId);
 }
 
-export type AuthSession = typeof auth.$Infer.Session
+export type AuthSession = typeof auth.$Infer.Session;
