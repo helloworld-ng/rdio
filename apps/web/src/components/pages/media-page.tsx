@@ -3,7 +3,7 @@ import { ListMusic, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { MediaPreviewThumb } from "@/components/MediaPreviewThumb";
 import { UploadMediaDialog } from "@/components/media/upload-media-dialog";
-import { Modal } from "@/components/ui/modal";
+import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog";
 import { API_BASE_URL } from "@/lib/constants";
 import {
   mediaQueryOptions,
@@ -16,10 +16,12 @@ import { formatFileSize } from "@/utils/media";
 import { formatUploadTime } from "@/utils/time";
 
 interface MediaPageProps {
+  error: string;
   filter: "all" | MediaItem["type"];
   mediaItems: MediaItem[];
   onChangeFilter: (filter: "all" | MediaItem["type"]) => void;
-  onDeleteMedia: (mediaId: string) => Promise<void>;
+  onClearError: () => void;
+  onDeleteMedia: (media: MediaItem) => void;
   onUploadMedia: (file: File) => Promise<MediaItem>;
 }
 
@@ -29,77 +31,77 @@ export function MediaPage() {
   const uploadMediaMutation = useUploadMedia();
   const deleteMediaMutation = useDeleteMedia();
   const [filter, setFilter] = useState<"all" | MediaItem["type"]>("all");
-  const [pendingMediaDeleteId, setPendingMediaDeleteId] = useState<
-    string | null
-  >(null);
+  const [error, setError] = useState("");
+  const [pendingDeleteMedia, setPendingDeleteMedia] =
+    useState<MediaItem | null>(null);
   const blocks = scheduleBlocksQuery.data?.blocks ?? [];
-  const pendingMediaUseCount = pendingMediaDeleteId
-    ? blocks.filter((block) => block.mediaId === pendingMediaDeleteId).length
+  const pendingMediaUseCount = pendingDeleteMedia
+    ? blocks.filter((block) => block.mediaId === pendingDeleteMedia.id).length
     : 0;
-
-  const deleteMediaFromPage = async (mediaId: string) => {
-    const scheduledUseCount = blocks.filter(
-      (block) => block.mediaId === mediaId
-    ).length;
-
-    if (scheduledUseCount > 0) {
-      setPendingMediaDeleteId(mediaId);
-      return;
-    }
-
-    await deleteMediaMutation.mutateAsync(mediaId);
-  };
 
   return (
     <>
       <MediaView
+        error={error}
         filter={filter}
         mediaItems={mediaQuery.data ?? []}
         onChangeFilter={setFilter}
-        onDeleteMedia={deleteMediaFromPage}
+        onClearError={() => setError("")}
+        onDeleteMedia={setPendingDeleteMedia}
         onUploadMedia={uploadMediaMutation.mutateAsync}
       />
-      {pendingMediaDeleteId ? (
-        <Modal
-          onClose={() => setPendingMediaDeleteId(null)}
-          title="Delete scheduled media?"
-        >
-          <p>
-            This media file is used by {pendingMediaUseCount} schedule slot
-            {pendingMediaUseCount === 1 ? "" : "s"}. Delete it and clear those
-            slots?
-          </p>
-          <div className="form-actions">
-            <button onClick={() => setPendingMediaDeleteId(null)} type="button">
-              Cancel
-            </button>
-            <button
-              className="primary-action"
-              onClick={() => {
-                const mediaId = pendingMediaDeleteId;
-                setPendingMediaDeleteId(null);
-                deleteMediaMutation.mutate(mediaId);
-              }}
-              type="button"
-            >
-              Delete media
-            </button>
-          </div>
-        </Modal>
-      ) : null}
+      <DeleteConfirmationDialog
+        confirmLabel="Delete media"
+        description={
+          pendingMediaUseCount > 0 ? (
+            <>
+              Permanently delete{" "}
+              <strong className="font-semibold text-[#30363a]">
+                {pendingDeleteMedia?.name ?? "this media file"}
+              </strong>
+              ? This file is used by {pendingMediaUseCount} schedule slot
+              {pendingMediaUseCount === 1 ? "" : "s"}. Deleting it will clear
+              those slots and cannot be undone.
+            </>
+          ) : undefined
+        }
+        entityName={pendingDeleteMedia?.name}
+        onConfirm={async () => {
+          if (!pendingDeleteMedia) {
+            return;
+          }
+
+          try {
+            await deleteMediaMutation.mutateAsync(pendingDeleteMedia.id);
+          } catch {
+            setError("Delete failed. Please try again.");
+            throw new Error("Delete failed. Please try again.");
+          }
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDeleteMedia(null);
+          }
+        }}
+        open={Boolean(pendingDeleteMedia)}
+        title={
+          pendingMediaUseCount > 0 ? "Delete scheduled media?" : "Delete media?"
+        }
+      />
     </>
   );
 }
 
 function MediaView({
+  error,
   filter,
   mediaItems,
   onChangeFilter,
+  onClearError,
   onDeleteMedia,
   onUploadMedia,
 }: MediaPageProps) {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [error, setError] = useState("");
   const visibleItems = mediaItems.filter(
     (item) => filter === "all" || item.type === filter
   );
@@ -170,10 +172,8 @@ function MediaView({
               <button
                 aria-label={`Delete ${item.name}`}
                 onClick={() => {
-                  setError("");
-                  onDeleteMedia(item.id).catch(() =>
-                    setError("Delete failed. Please try again.")
-                  );
+                  onClearError();
+                  onDeleteMedia(item);
                 }}
                 type="button"
               >

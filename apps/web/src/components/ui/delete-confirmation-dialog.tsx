@@ -9,10 +9,11 @@ import {
 } from "@rdio/ui/components/alert-dialog";
 import { Button } from "@rdio/ui/components/button";
 import { X } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 interface DeleteConfirmationDialogProps {
   confirmLabel?: string;
+  description?: ReactNode;
   entityName?: string;
   onConfirm: () => Promise<void>;
   onOpenChange: (open: boolean) => void;
@@ -23,6 +24,7 @@ interface DeleteConfirmationDialogProps {
 /** Shared destructive confirmation dialog for app records. */
 export function DeleteConfirmationDialog({
   confirmLabel = "Delete",
+  description,
   entityName,
   onConfirm,
   onOpenChange,
@@ -59,11 +61,15 @@ export function DeleteConfirmationDialog({
           </AlertDialogCancel>
         </AlertDialogHeader>
         <AlertDialogDescription className="text-[#5f6b70] text-sm leading-6">
-          Permanently delete{" "}
-          <strong className="font-semibold text-[#30363a]">
-            {entityName ?? "this item"}
-          </strong>
-          ? This cannot be undone.
+          {description ?? (
+            <>
+              Permanently delete{" "}
+              <strong className="font-semibold text-[#30363a]">
+                {entityName ?? "this item"}
+              </strong>
+              ? This cannot be undone.
+            </>
+          )}
         </AlertDialogDescription>
         <AlertDialogFooter className="flex-row justify-end gap-2">
           <AlertDialogCancel
