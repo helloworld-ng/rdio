@@ -1184,76 +1184,6 @@ button {
   opacity: 0.54;
 }
 
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(29, 42, 48, 0.22);
-}
-
-.modal-backdrop-close {
-  position: absolute;
-  inset: 0;
-  padding: 0;
-  cursor: default;
-  background: transparent;
-  border: 0;
-}
-
-.modal-panel {
-  position: relative;
-  display: grid;
-  gap: 18px;
-  width: min(540px, 100%);
-  max-height: min(760px, calc(100vh - 48px));
-  padding: 18px 18px 16px;
-  overflow: auto;
-  background: #ffffff;
-  border: 1px solid #d9e3e6;
-  border-radius: 12px;
-  box-shadow: 0 26px 60px rgba(36, 54, 61, 0.2);
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--color-rule);
-}
-
-.modal-header strong {
-  font-size: 17px;
-  font-weight: 600;
-  line-height: 20px;
-  color: #30363a;
-}
-
-.modal-header button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  color: #879297;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 5px;
-}
-
-.modal-header button:hover,
-.modal-header button:focus-visible {
-  color: var(--color-accent);
-  outline: 0;
-  background: #f5fbfc;
-  border-color: #d4e4e8;
-}
-
 .creation-form {
   display: grid;
   gap: 11px;
@@ -2739,16 +2669,6 @@ input[type="search"]::-webkit-search-results-decoration {
 
   .connection-toggle {
     grid-column: 2;
-  }
-
-  .modal-backdrop {
-    align-items: stretch;
-    padding: 14px;
-  }
-
-  .modal-panel {
-    max-height: calc(100vh - 28px);
-    overflow: auto;
   }
 
   .schedule-workbench .calendar-view {
