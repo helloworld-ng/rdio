@@ -5,10 +5,22 @@ import {
   isSetupComplete,
 } from "@rdio/auth/server";
 import { env } from "@rdio/env/server";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { requestSession } from "../lib/auth.js";
 import { validateJsonBody } from "../lib/validation.js";
 import { changePasswordBodySchema } from "../schemas/api.js";
+
+/** Uses the browser-facing origin when nginx proxies auth (cookies must match the web host). */
+function resolveAuthBaseUrl(request: FastifyRequest) {
+  const forwardedHost = request.headers["x-forwarded-host"];
+  const forwardedProto = request.headers["x-forwarded-proto"] ?? "https";
+
+  if (typeof forwardedHost === "string" && forwardedHost.length > 0) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+
+  return env.BETTER_AUTH_URL;
+}
 
 /** Serializes Fastify bodies for the Better Auth handler (global parser uses buffers). */
 function serializeAuthBody(body: unknown) {
@@ -33,7 +45,7 @@ export function authRoutes(server: FastifyInstance) {
     url: "/api/auth/*",
     async handler(request, reply) {
       try {
-        const url = new URL(request.url, env.BETTER_AUTH_URL);
+        const url = new URL(request.url, resolveAuthBaseUrl(request));
         const body = serializeAuthBody(request.body);
         const authRequest = new Request(url.toString(), {
           method: request.method,

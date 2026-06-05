@@ -3,7 +3,7 @@ FROM node:22-alpine AS build
 RUN corepack enable pnpm
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json .npmrc ./
 COPY apps/web/package.json      apps/web/
 COPY apps/api/package.json      apps/api/
 COPY apps/worker/package.json   apps/worker/
@@ -16,6 +16,7 @@ COPY packages/tsconfig/package.json packages/tsconfig/
 COPY packages/ui/package.json       packages/ui/
 
 RUN pnpm install --frozen-lockfile
+RUN pnpm rebuild esbuild
 
 COPY packages/ packages/
 COPY apps/web/ apps/web/
@@ -25,7 +26,10 @@ COPY apps/web/ apps/web/
 ARG VITE_API_BASE_URL=http://localhost:3001
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
-RUN pnpm --filter=@rdio/web... run build
+RUN pnpm --filter "@rdio/web^..." run build
+WORKDIR /app/apps/web
+RUN pnpm exec tsc -b && node /app/node_modules/vite/bin/vite.js build
+WORKDIR /app
 
 # ── runtime stage ─────────────────────────────────────────────────────────────
 FROM nginx:alpine
