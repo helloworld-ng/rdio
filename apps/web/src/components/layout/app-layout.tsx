@@ -6,7 +6,6 @@ import { StationLoading } from "@/components/ui/station-loading";
 import { useResponsiveSidebar } from "@/hooks/use-responsive-sidebar";
 import { MOBILE_SIDEBAR_QUERY } from "@/lib/constants";
 import { stationQueryOptions } from "@/lib/queries/station";
-import "@/styles/app.css";
 import type { ViewName } from "@/types/navigation";
 
 const viewPathPattern = /^\/([^/]+)\/?$/;
