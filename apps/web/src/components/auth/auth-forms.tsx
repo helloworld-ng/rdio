@@ -158,7 +158,7 @@ export function ChangePasswordForm({ onComplete }: AuthFormProps) {
 
     setIsSubmitting(true);
     setError("");
-    const response = await apiFetch("/auth/change-password", {
+    const response = await apiFetch("/session/change-password", {
       body: JSON.stringify({ currentPassword, newPassword }),
       headers: { "Content-Type": "application/json" },
       method: "POST",

@@ -1,8 +1,13 @@
 import { getSession } from "@rdio/auth/server";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
+const apiPrefixPattern = /^\/api(?=\/|$)/;
 const scheduleDayPathPattern = /^\/schedule-blocks\/\d{4}-\d{2}-\d{2}$/;
 const mediaItemPathPattern = /^\/media\/[^/]+$/;
+
+function stripApiPrefix(pathname: string) {
+  return pathname.replace(apiPrefixPattern, "") || "/";
+}
 
 function isPublicRequest(method: string, url: string) {
   if (method === "OPTIONS" || method === "HEAD") {
@@ -13,7 +18,7 @@ function isPublicRequest(method: string, url: string) {
     return false;
   }
 
-  const pathname = url.split("?")[0];
+  const pathname = stripApiPrefix(url.split("?")[0]);
 
   return (
     pathname === "/health" ||
@@ -60,10 +65,11 @@ export async function requireAdminSession(
 export function addAuthGuard(server: FastifyInstance) {
   server.addHook("preHandler", async (request, reply) => {
     const pathname = request.url.split("?")[0];
+    const unprefixedPathname = stripApiPrefix(pathname);
 
     if (
       isPublicRequest(request.method, request.url) ||
-      pathname === "/auth/setup-status" ||
+      pathname === "/api/setup-status" ||
       pathname.startsWith("/api/auth/")
     ) {
       return;
@@ -76,8 +82,8 @@ export function addAuthGuard(server: FastifyInstance) {
 
     if (
       session.user.mustChangePassword &&
-      pathname !== "/auth/change-password" &&
-      pathname !== "/auth/me"
+      unprefixedPathname !== "/session/change-password" &&
+      unprefixedPathname !== "/session"
     ) {
       return reply.status(403).send({
         error: "Change your temporary password before continuing.",

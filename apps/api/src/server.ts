@@ -7,7 +7,7 @@ import {
   refreshCurrentPlayout,
 } from "./lib/station-store.js";
 import { authRoutes } from "./routes/auth.js";
-import { broadcastRoutes } from "./routes/broadcast.js";
+import { broadcastRoutes, liveStreamRoutes } from "./routes/broadcast.js";
 import { hostRoutes } from "./routes/hosts.js";
 import { mediaRoutes } from "./routes/media.js";
 import { memberRoutes } from "./routes/members.js";
@@ -35,13 +35,14 @@ server.addContentTypeParser(
 );
 
 await server.register(authRoutes);
-await server.register(memberRoutes, { prefix: "/members" });
-await server.register(broadcastRoutes);
-await server.register(stationRoutes);
-await server.register(scheduleBlockRoutes, { prefix: "/schedule-blocks" });
-await server.register(programRoutes, { prefix: "/programs" });
-await server.register(hostRoutes, { prefix: "/hosts" });
-await server.register(mediaRoutes, { prefix: "/media" });
+await server.register(liveStreamRoutes);
+await server.register(memberRoutes, { prefix: "/api/members" });
+await server.register(broadcastRoutes, { prefix: "/api" });
+await server.register(stationRoutes, { prefix: "/api" });
+await server.register(scheduleBlockRoutes, { prefix: "/api/schedule-blocks" });
+await server.register(programRoutes, { prefix: "/api/programs" });
+await server.register(hostRoutes, { prefix: "/api/hosts" });
+await server.register(mediaRoutes, { prefix: "/api/media" });
 
 await server.listen({ port: env.API_PORT, host: "0.0.0.0" });
 await initializePlayout(server.log);

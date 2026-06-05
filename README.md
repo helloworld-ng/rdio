@@ -104,7 +104,7 @@ Default local endpoints:
 | `WEB_ORIGIN` | `http://localhost:5173` | Allowed CORS origin |
 | `BETTER_AUTH_SECRET` | _(required)_ | Strong random secret used to sign Better Auth cookies and tokens |
 | `BETTER_AUTH_URL` | `http://localhost:3001` | Public API origin used by Better Auth |
-| `VITE_API_BASE_URL` | `http://localhost:3001` | API base URL baked into the web build at build time |
+| `VITE_API_BASE_URL` | `http://localhost:3001/api` locally, `/api` in production | API base URL baked into the web build at build time |
 | `PUBLIC_STREAM_BASE_URL` | _(request origin)_ | Optional public stream origin used to build `streamUrl` in API responses. Leave blank to use the API's `/live.mp3` proxy |
 | `ICECAST_HOST` | `localhost` | Icecast host (Liquidsoap connects here) |
 | `ICECAST_PORT` | `8001` in the bundled API container, `8000` for local Docker Compose Icecast | Icecast port |
@@ -154,11 +154,11 @@ cp /path/to/fallback.mp3 /media/fallback/v1-tone.mp3
 
 ### Web
 
-The web app can be deployed by building `apps/web` with the API URL available at build time. If using GitHub Actions, set this repository secret:
+The web app can be deployed by building `apps/web` with API traffic routed through nginx's same-origin `/api` proxy. If using GitHub Actions, set this repository secret only when overriding the default:
 
 | Secret | Value |
 |--------|-------|
-| `VITE_API_BASE_URL` | Public API origin |
+| `VITE_API_BASE_URL` | `/api` for the bundled nginx proxy, or a custom API base URL ending in `/api` |
 
 Build manually from the repo root:
 
@@ -187,45 +187,45 @@ Schedule blocks are stored as daily JSON files. If a legacy `blocks.json` is pre
 ### Public
 
 ```
-GET  /health                    Service health check
-GET  /station                   Station metadata and stream URL
-GET  /schedule                  Station schedule snapshot
-GET  /now-playing               Current stream source and upcoming programs
-GET  /schedule-blocks/:day      Schedule blocks for a given day (YYYY-MM-DD)
-GET  /broadcast/status          Live broadcast source connection status
+GET  /api/health                    Service health check
+GET  /api/station                   Station metadata and stream URL
+GET  /api/schedule                  Station schedule snapshot
+GET  /api/now-playing               Current stream source and upcoming programs
+GET  /api/schedule-blocks/:day      Schedule blocks for a given day (YYYY-MM-DD)
+GET  /api/broadcast/status          Live broadcast source connection status
 GET  /live.mp3                  Live audio stream (proxied from internal Icecast2)
-GET  /media/:id                 Serve a media file
+GET  /api/media/:id                 Serve a media file
 ```
 
 ### Authenticated station UI
 
 ```
-GET    /schedule-blocks         All schedule blocks
-PUT    /schedule-blocks         Replace all schedule blocks; triggers playout refresh
-GET    /broadcast/settings      BUTT/Icecast source settings, including source password
-GET    /programs                List programs
-POST   /programs                Create a program
-PUT    /programs/:id            Update a program
-DELETE /programs/:id            Delete a program
-GET    /hosts                   List hosts
-POST   /hosts                   Create a host
-PUT    /hosts/:name             Update a host (cascades name changes to programs and blocks)
-DELETE /hosts/:name             Delete a host
-GET    /media                   List uploaded media files
-POST   /media                   Upload a media file (binary body, X-File-Name header)
-DELETE /media/:id               Delete a media file; triggers playout refresh
-GET    /playout/current         Current Liquidsoap playout file path
+GET    /api/schedule-blocks         All schedule blocks
+PUT    /api/schedule-blocks         Replace all schedule blocks; triggers playout refresh
+GET    /api/broadcast/settings      BUTT/Icecast source settings, including source password
+GET    /api/programs                List programs
+POST   /api/programs                Create a program
+PUT    /api/programs/:id            Update a program
+DELETE /api/programs/:id            Delete a program
+GET    /api/hosts                   List hosts
+POST   /api/hosts                   Create a host
+PUT    /api/hosts/:name             Update a host (cascades name changes to programs and blocks)
+DELETE /api/hosts/:name             Delete a host
+GET    /api/media                   List uploaded media files
+POST   /api/media                   Upload a media file (binary body, X-File-Name header)
+DELETE /api/media/:id               Delete a media file; triggers playout refresh
+GET    /api/playout/current         Current Liquidsoap playout file path
 ```
 
 ### Authentication and members
 
 ```
-GET    /auth/setup-status       Whether the first administrator still needs to be created
-GET    /auth/me                 Current authenticated session
-POST   /auth/change-password    Replace a temporary password
-GET    /members                 List members (administrator only)
-POST   /members                 Create a member with a temporary password (administrator only)
-*      /api/auth/*              Better Auth session endpoints
+GET    /api/setup-status            Whether the first administrator still needs to be created
+GET    /api/session                 Current authenticated session
+POST   /api/session/change-password Replace a temporary password
+GET    /api/members                 List members (administrator only)
+POST   /api/members                 Create a member with a temporary password (administrator only)
+*      /api/auth/*                  Better Auth session endpoints
 ```
 
 ## Station config
@@ -249,4 +249,4 @@ Liquidsoap reads `current.txt` via a `request.dynamic` source. The API refreshes
 
 ## Live broadcast (BUTT)
 
-The Broadcast view in the admin shows connection settings for BUTT (Broadcast Using This Tool). Connect BUTT to the Liquidsoap Harbor input using the source password from your env (`ICECAST_SOURCE_PASSWORD`). The password is only returned from the authenticated `GET /broadcast/settings` endpoint. Locally and in production, BUTT connects to the Harbor port (`HARBOR_PORT`, default `8005`) at mount `/broadcast.mp3`. Liquidsoap remains the only source publishing the public listener mount `/live.mp3`.
+The Broadcast view in the admin shows connection settings for BUTT (Broadcast Using This Tool). Connect BUTT to the Liquidsoap Harbor input using the source password from your env (`ICECAST_SOURCE_PASSWORD`). The password is only returned from the authenticated `GET /api/broadcast/settings` endpoint. Locally and in production, BUTT connects to the Harbor port (`HARBOR_PORT`, default `8005`) at mount `/broadcast.mp3`. Liquidsoap remains the only source publishing the public listener mount `/live.mp3`.

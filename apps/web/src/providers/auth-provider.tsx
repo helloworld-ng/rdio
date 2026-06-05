@@ -52,7 +52,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     enabled: !session.data,
     queryKey: queryKeys.auth.setupStatus.queryKey,
     queryFn: async () => {
-      const response = await apiFetch("/auth/setup-status");
+      const response = await apiFetch("/setup-status");
 
       if (!response.ok) {
         throw new Error("Could not check setup status");

@@ -4,42 +4,55 @@ import {
   changeTemporaryPassword,
   isSetupComplete,
 } from "@rdio/auth/server";
-import { env } from "@rdio/env/server";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { requestSession } from "../lib/auth.js";
 import { validateJsonBody } from "../lib/validation.js";
 import { changePasswordBodySchema } from "../schemas/api.js";
-
-/** Uses the browser-facing origin when nginx proxies auth (cookies must match the web host). */
-function resolveAuthBaseUrl(request: FastifyRequest) {
-  const forwardedHost = request.headers["x-forwarded-host"];
-  const forwardedProto = request.headers["x-forwarded-proto"] ?? "https";
-
-  if (typeof forwardedHost === "string" && forwardedHost.length > 0) {
-    return `${forwardedProto}://${forwardedHost}`;
-  }
-
-  return env.BETTER_AUTH_URL;
-}
-
-/** Serializes Fastify bodies for the Better Auth handler (global parser uses buffers). */
-function serializeAuthBody(body: unknown) {
-  if (body === undefined) {
-    return;
-  }
-
-  if (Buffer.isBuffer(body)) {
-    return body.toString("utf8");
-  }
-
-  if (typeof body === "string") {
-    return body;
-  }
-
-  return JSON.stringify(body);
-}
+import {
+  resolveAuthBaseUrl,
+  serializeAuthBody,
+} from "../utils/auth-request.js";
 
 export function authRoutes(server: FastifyInstance) {
+  server.get("/api/setup-status", async () => ({
+    setupRequired: !(await isSetupComplete()),
+  }));
+
+  server.get("/api/session", async (request, reply) => {
+    const session = await requestSession(request);
+    if (!session) {
+      return reply.status(401).send({ error: "Unauthorized" });
+    }
+
+    return session;
+  });
+
+  server.post("/api/session/change-password", async (request, reply) => {
+    const session = await requestSession(request);
+    if (!session) {
+      return reply.status(401).send({ error: "Unauthorized" });
+    }
+
+    const body = validateJsonBody(
+      reply,
+      changePasswordBodySchema,
+      request.body
+    );
+    if (!body) {
+      return;
+    }
+
+    await changeTemporaryPassword(
+      request.headers,
+      session.user.id,
+      body.currentPassword,
+      body.newPassword
+    );
+
+    return reply.status(204).send();
+  });
+
+  // Better Auth owns the /api/auth/* namespace for its internal session endpoints.
   server.route({
     method: ["GET", "POST"],
     url: "/api/auth/*",
@@ -67,43 +80,5 @@ export function authRoutes(server: FastifyInstance) {
         });
       }
     },
-  });
-
-  server.get("/auth/setup-status", async () => ({
-    setupRequired: !(await isSetupComplete()),
-  }));
-
-  server.get("/auth/me", async (request, reply) => {
-    const session = await requestSession(request);
-    if (!session) {
-      return reply.status(401).send({ error: "Unauthorized" });
-    }
-
-    return session;
-  });
-
-  server.post("/auth/change-password", async (request, reply) => {
-    const session = await requestSession(request);
-    if (!session) {
-      return reply.status(401).send({ error: "Unauthorized" });
-    }
-
-    const body = validateJsonBody(
-      reply,
-      changePasswordBodySchema,
-      request.body
-    );
-    if (!body) {
-      return;
-    }
-
-    await changeTemporaryPassword(
-      request.headers,
-      session.user.id,
-      body.currentPassword,
-      body.newPassword
-    );
-
-    return reply.status(204).send();
   });
 }

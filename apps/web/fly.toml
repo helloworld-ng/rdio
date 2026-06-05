@@ -5,8 +5,7 @@ primary_region = "lhr"
 [build]
   dockerfile = "../../apps/web/Dockerfile"
   # VITE_API_BASE_URL is baked into the JS bundle at build time.
-  # Production MUST use the web origin (nginx proxies /api to rdio-api):
-  # fly deploy -c apps/web/fly.toml --build-arg VITE_API_BASE_URL=https://rdio-web.fly.dev
+  # By default, the web app calls same-origin /api and nginx proxies that to rdio-api.
 
 [http_service]
   internal_port        = 80

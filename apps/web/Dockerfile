@@ -22,8 +22,8 @@ COPY packages/ packages/
 COPY apps/web/ apps/web/
 
 # VITE_API_BASE_URL is baked into the bundle at build time.
-# Pass it as --build-arg when running fly deploy (see fly.toml comment).
-ARG VITE_API_BASE_URL=http://localhost:3001
+# Production defaults API requests to nginx's same-origin /api proxy.
+ARG VITE_API_BASE_URL=/api
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 RUN pnpm --filter "@rdio/web^..." run build
