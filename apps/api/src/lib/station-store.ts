@@ -494,6 +494,17 @@ function icecastSettings(mount: string) {
 }
 
 function broadcastIcecastSettings() {
+  const mount = "/broadcast.mp3";
+
+  if (env.BROADCAST_HOST) {
+    return {
+      host: env.BROADCAST_HOST,
+      port: env.HARBOR_PORT,
+      tlsPort: env.HARBOR_TLS_PORT,
+      mount,
+    };
+  }
+
   const streamBaseUrl = env.PUBLIC_STREAM_BASE_URL;
   let host = "localhost";
 
@@ -506,7 +517,8 @@ function broadcastIcecastSettings() {
   return {
     host,
     port: env.HARBOR_PORT,
-    mount: "/broadcast.mp3",
+    tlsPort: env.HARBOR_TLS_PORT,
+    mount,
   };
 }
 

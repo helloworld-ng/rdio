@@ -8,6 +8,9 @@ icecast_host     = environment.get("ICECAST_HOST",            default="localhost
 icecast_port     = int_of_string(environment.get("ICECAST_PORT",     default="8001"))
 icecast_password = environment.get("ICECAST_SOURCE_PASSWORD", default="sourcepass")
 harbor_port      = int_of_string(environment.get("HARBOR_PORT",      default="8005"))
+harbor_tls_port  = int_of_string(environment.get("HARBOR_TLS_PORT", default="8443"))
+harbor_tls_cert  = environment.get("HARBOR_TLS_CERT", default="/media/harbor-tls/tls.crt")
+harbor_tls_key   = environment.get("HARBOR_TLS_KEY",  default="/media/harbor-tls/tls.key")
 live_status_file = "/media/schedule/broadcast-status.txt"
 broadcast_active_file = "/media/schedule/broadcast-active"
 
@@ -20,7 +23,7 @@ def mark_live_disconnected() =
 end
 
 # Live broadcast source — BUTT connects directly to Liquidsoap.
-live = input.harbor(
+live_plain = input.harbor(
   buffer = 1.0,
   max = 3.0,
   on_connect = mark_live_connected,
@@ -30,6 +33,26 @@ live = input.harbor(
   user = "source",
   "/broadcast.mp3"
 )
+
+# TLS harbor for networks that block plain Icecast on port 8005.
+harbor_tls_transport = http.transport.ssl(
+  certificate = harbor_tls_cert,
+  key = harbor_tls_key
+)
+
+live_tls = input.harbor(
+  buffer = 1.0,
+  max = 3.0,
+  on_connect = mark_live_connected,
+  on_disconnect = mark_live_disconnected,
+  password = icecast_password,
+  port = harbor_tls_port,
+  transport = harbor_tls_transport,
+  user = "source",
+  "/broadcast.mp3"
+)
+
+live = fallback(track_sensitive = false, [live_tls, live_plain])
 
 def get_scheduled_request() =
   lines = process.read.lines("cat /media/schedule/current.txt 2>/dev/null")

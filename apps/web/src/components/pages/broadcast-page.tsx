@@ -28,6 +28,7 @@ function BroadcastView({ station }: { station: StationSummary }) {
   const [settingsError, setSettingsError] = useState("");
   const icecast = broadcastSettings ?? station.broadcastIcecast;
   const mount = icecast.mount.replace(leadingSlashPattern, "");
+  const tlsPort = icecast.tlsPort;
   const sourcePassword = broadcastSettings?.sourcePassword;
 
   useEffect(() => {
@@ -125,6 +126,33 @@ function BroadcastView({ station }: { station: StationSummary }) {
         </section>
         <section aria-label="BUTT settings" className="broadcast-settings">
           {settingsError ? <p className="form-error">{settingsError}</p> : null}
+          {tlsPort ? (
+            <>
+              <p className="broadcast-settings-note">
+                If connecting from a restricted network, use TLS (SSL on) with
+                port {tlsPort}. Otherwise use the standard settings below.
+              </p>
+              <div className="settings-list">
+                <SettingsRow label="Application" value="BUTT" />
+                <SettingsRow
+                  label="Server type"
+                  value="Icecast / Liquidsoap Harbor"
+                />
+                <SettingsRow label="Address" value={icecast.host} />
+                <SettingsRow label="Port" value={String(tlsPort)} />
+                <SettingsRow label="SSL / TLS" value="On" />
+                <SettingsRow label="User" value="source" />
+                <SettingsRow
+                  label="Password"
+                  value={sourcePassword ?? "Unavailable"}
+                />
+                <SettingsRow label="Mount" value={mount} />
+              </div>
+            </>
+          ) : null}
+          <p className="broadcast-settings-note">
+            {tlsPort ? "Standard connection (no SSL):" : "Connection settings:"}
+          </p>
           <div className="settings-list">
             <SettingsRow label="Application" value="BUTT" />
             <SettingsRow
@@ -133,6 +161,7 @@ function BroadcastView({ station }: { station: StationSummary }) {
             />
             <SettingsRow label="Address" value={icecast.host} />
             <SettingsRow label="Port" value={String(icecast.port)} />
+            {tlsPort ? <SettingsRow label="SSL / TLS" value="Off" /> : null}
             <SettingsRow label="User" value="source" />
             <SettingsRow
               label="Password"

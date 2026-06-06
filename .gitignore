@@ -4,6 +4,7 @@ dist
 *.tsbuildinfo
 .env
 .env.local
+.wireguard/
 .env.*.local
 media/uploads/*
 !media/uploads/.gitignore

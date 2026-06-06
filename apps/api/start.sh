@@ -3,8 +3,22 @@ set -e
 
 ICECAST_SOURCE_PASSWORD="${ICECAST_SOURCE_PASSWORD:-sourcepass}"
 ICECAST_PORT="${ICECAST_PORT:-8001}"
+HARBOR_TLS_PORT="${HARBOR_TLS_PORT:-8443}"
+BROADCAST_HOST="${BROADCAST_HOST:-rdio-api.fly.dev}"
+HARBOR_TLS_DIR="/media/harbor-tls"
 ICECAST_QUEUE_SIZE="${ICECAST_QUEUE_SIZE:-131072}"
 ICECAST_BURST_SIZE="${ICECAST_BURST_SIZE:-16384}"
+
+mkdir -p "$HARBOR_TLS_DIR"
+if [ ! -f "$HARBOR_TLS_DIR/tls.crt" ]; then
+  openssl req -x509 -newkey rsa:2048 -sha256 -days 3650 -nodes \
+    -keyout "$HARBOR_TLS_DIR/tls.key" \
+    -out "$HARBOR_TLS_DIR/tls.crt" \
+    -subj "/CN=${BROADCAST_HOST}" \
+    -addext "subjectAltName=DNS:${BROADCAST_HOST}"
+fi
+export HARBOR_TLS_CERT="$HARBOR_TLS_DIR/tls.crt"
+export HARBOR_TLS_KEY="$HARBOR_TLS_DIR/tls.key"
 
 # Write icecast config
 cat > /etc/icecast2/icecast.xml <<EOF

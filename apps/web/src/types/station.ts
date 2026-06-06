@@ -4,6 +4,8 @@ export interface IcecastSettings {
   host: string;
   mount: string;
   port: number;
+  /** TLS harbor port for Icecast-over-SSL (BUTT: enable SSL, use this port). */
+  tlsPort?: number;
 }
 
 export interface BroadcastIcecastSettings extends IcecastSettings {

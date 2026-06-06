@@ -1806,6 +1806,13 @@ input[type="search"]::-webkit-search-results-decoration {
 
 .broadcast-settings {
   display: grid;
+  gap: 1rem;
+}
+
+.broadcast-settings-note {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-muted, #8a8a8a);
 }
 
 .library-header {
