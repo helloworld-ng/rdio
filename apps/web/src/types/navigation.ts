@@ -5,4 +5,5 @@ export type ViewName =
   | "media"
   | "broadcast"
   | "members"
+  | "profile"
   | "settings";

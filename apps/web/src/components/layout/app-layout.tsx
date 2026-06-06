@@ -19,6 +19,7 @@ function readViewName(pathname: string): ViewName {
     view === "media" ||
     view === "broadcast" ||
     view === "members" ||
+    view === "profile" ||
     view === "settings" ||
     view === "schedule"
     ? view

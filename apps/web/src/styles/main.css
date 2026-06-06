@@ -217,12 +217,14 @@ button {
 }
 
 .user-account-dropdown-item {
+  display: block;
   width: 100%;
   padding: 8px 10px;
   font-size: 13px;
   line-height: 18px;
   color: var(--color-text);
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
   background: transparent;
   border: 0;

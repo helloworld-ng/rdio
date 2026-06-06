@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { ChevronDown } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 
@@ -52,6 +53,14 @@ export function UserAccountMenu({
       </button>
       {isOpen ? (
         <div className="user-account-dropdown" id={menuId} role="menu">
+          <Link
+            className="user-account-dropdown-item"
+            onClick={() => setIsOpen(false)}
+            role="menuitem"
+            to="/profile"
+          >
+            Profile
+          </Link>
           <button
             className="user-account-dropdown-item"
             onClick={() => {

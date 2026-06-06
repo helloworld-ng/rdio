@@ -18,6 +18,7 @@ import { Route as AuthChangePasswordRouteImport } from './routes/_auth.change-pa
 import { Route as AppSettingsRouteImport } from './routes/_app.settings'
 import { Route as AppScheduleRouteImport } from './routes/_app.schedule'
 import { Route as AppProgramsRouteImport } from './routes/_app.programs'
+import { Route as AppProfileRouteImport } from './routes/_app.profile'
 import { Route as AppMembersRouteImport } from './routes/_app.members'
 import { Route as AppMediaRouteImport } from './routes/_app.media'
 import { Route as AppHostsRouteImport } from './routes/_app.hosts'
@@ -66,6 +67,11 @@ const AppProgramsRoute = AppProgramsRouteImport.update({
   path: '/programs',
   getParentRoute: () => AppRoute,
 } as any)
+const AppProfileRoute = AppProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppMembersRoute = AppMembersRouteImport.update({
   id: '/members',
   path: '/members',
@@ -93,6 +99,7 @@ export interface FileRoutesByFullPath {
   '/hosts': typeof AppHostsRoute
   '/media': typeof AppMediaRoute
   '/members': typeof AppMembersRoute
+  '/profile': typeof AppProfileRoute
   '/programs': typeof AppProgramsRoute
   '/schedule': typeof AppScheduleRoute
   '/settings': typeof AppSettingsRoute
@@ -106,6 +113,7 @@ export interface FileRoutesByTo {
   '/hosts': typeof AppHostsRoute
   '/media': typeof AppMediaRoute
   '/members': typeof AppMembersRoute
+  '/profile': typeof AppProfileRoute
   '/programs': typeof AppProgramsRoute
   '/schedule': typeof AppScheduleRoute
   '/settings': typeof AppSettingsRoute
@@ -122,6 +130,7 @@ export interface FileRoutesById {
   '/_app/hosts': typeof AppHostsRoute
   '/_app/media': typeof AppMediaRoute
   '/_app/members': typeof AppMembersRoute
+  '/_app/profile': typeof AppProfileRoute
   '/_app/programs': typeof AppProgramsRoute
   '/_app/schedule': typeof AppScheduleRoute
   '/_app/settings': typeof AppSettingsRoute
@@ -137,6 +146,7 @@ export interface FileRouteTypes {
     | '/hosts'
     | '/media'
     | '/members'
+    | '/profile'
     | '/programs'
     | '/schedule'
     | '/settings'
@@ -150,6 +160,7 @@ export interface FileRouteTypes {
     | '/hosts'
     | '/media'
     | '/members'
+    | '/profile'
     | '/programs'
     | '/schedule'
     | '/settings'
@@ -165,6 +176,7 @@ export interface FileRouteTypes {
     | '/_app/hosts'
     | '/_app/media'
     | '/_app/members'
+    | '/_app/profile'
     | '/_app/programs'
     | '/_app/schedule'
     | '/_app/settings'
@@ -244,6 +256,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProgramsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/profile': {
+      id: '/_app/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof AppProfileRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/members': {
       id: '/_app/members'
       path: '/members'
@@ -280,6 +299,7 @@ interface AppRouteChildren {
   AppHostsRoute: typeof AppHostsRoute
   AppMediaRoute: typeof AppMediaRoute
   AppMembersRoute: typeof AppMembersRoute
+  AppProfileRoute: typeof AppProfileRoute
   AppProgramsRoute: typeof AppProgramsRoute
   AppScheduleRoute: typeof AppScheduleRoute
   AppSettingsRoute: typeof AppSettingsRoute
@@ -290,6 +310,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppHostsRoute: AppHostsRoute,
   AppMediaRoute: AppMediaRoute,
   AppMembersRoute: AppMembersRoute,
+  AppProfileRoute: AppProfileRoute,
   AppProgramsRoute: AppProgramsRoute,
   AppScheduleRoute: AppScheduleRoute,
   AppSettingsRoute: AppSettingsRoute,
