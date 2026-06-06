@@ -8,6 +8,7 @@ export const env = createEnv({
     BETTER_AUTH_URL: z.url().default("http://localhost:3001"),
     DATABASE_URL: z.string().min(1),
     HARBOR_PORT: z.coerce.number().int().positive().default(8005),
+    HARBOR_TLS_PORT: z.coerce.number().int().positive().default(8443),
     ICECAST_HOST: z.string().min(1).default("localhost"),
     ICECAST_PORT: z.coerce.number().int().positive().default(8000),
     ICECAST_SOURCE_PASSWORD: z.string().min(1).default("sourcepass"),
@@ -15,6 +16,8 @@ export const env = createEnv({
       .enum(["development", "production", "test"])
       .default("development"),
     PUBLIC_STREAM_BASE_URL: z.url().default("http://localhost:8000"),
+    /** Public hostname for BUTT/Harbor (Liquidsoap), separate from the web/nginx origin. */
+    BROADCAST_HOST: z.string().min(1).optional(),
     WEB_ORIGIN: z.string().min(1).default("http://localhost:5173"),
   },
   runtimeEnv: process.env,

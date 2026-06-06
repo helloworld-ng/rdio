@@ -12,6 +12,9 @@ primary_region = "lhr"
   NODE_ENV = "production"
   API_PORT  = "3001"
   HARBOR_PORT = "8005"
+  HARBOR_TLS_PORT = "8443"
+  # Harbor/Liquidsoap runs on this app — not the nginx web app.
+  BROADCAST_HOST = "rdio-api.fly.dev"
 
 [http_service]
   internal_port        = 3001
@@ -33,6 +36,13 @@ primary_region = "lhr"
 
   [[services.ports]]
     port = 8005
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8443
+
+  [[services.ports]]
+    port = 8443
 
 [[vm]]
   memory   = "1gb"
