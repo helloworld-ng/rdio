@@ -18,6 +18,16 @@ export const env = createEnv({
     PUBLIC_STREAM_BASE_URL: z.url().default("http://localhost:8000"),
     /** Public hostname for BUTT/Harbor (Liquidsoap), separate from the web/nginx origin. */
     BROADCAST_HOST: z.string().min(1).optional(),
+    MEDIA_UPLOAD_MAX_BYTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(500 * 1024 * 1024),
+    R2_ACCESS_KEY_ID: z.string().min(1),
+    R2_ACCOUNT_ID: z.string().min(1),
+    R2_BUCKET: z.string().min(1),
+    R2_PUBLIC_URL: z.url(),
+    R2_SECRET_ACCESS_KEY: z.string().min(1),
     WEB_ORIGIN: z.string().min(1).default("http://localhost:5173"),
   },
   runtimeEnv: process.env,

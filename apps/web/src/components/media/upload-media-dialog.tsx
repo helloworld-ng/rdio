@@ -49,8 +49,12 @@ export function UploadMediaDialog({
     try {
       await onSubmit(selectedFile);
       onOpenChange(false);
-    } catch {
-      setError("Upload failed. Please try again.");
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Upload failed. Please try again."
+      );
     } finally {
       setIsUploading(false);
     }

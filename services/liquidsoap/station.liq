@@ -34,25 +34,33 @@ live_plain = input.harbor(
   "/broadcast.mp3"
 )
 
-# TLS harbor for networks that block plain Icecast on port 8005.
-harbor_tls_transport = http.transport.ssl(
-  certificate = harbor_tls_cert,
-  key = harbor_tls_key
-)
+# TLS harbor is only enabled when cert files exist (generated on Fly at boot).
+def mk_live() =
+  if file.exists(harbor_tls_cert) and file.exists(harbor_tls_key) then
+    harbor_tls_transport = http.transport.ssl(
+      certificate = harbor_tls_cert,
+      key = harbor_tls_key
+    )
 
-live_tls = input.harbor(
-  buffer = 1.0,
-  max = 3.0,
-  on_connect = mark_live_connected,
-  on_disconnect = mark_live_disconnected,
-  password = icecast_password,
-  port = harbor_tls_port,
-  transport = harbor_tls_transport,
-  user = "source",
-  "/broadcast.mp3"
-)
+    live_tls = input.harbor(
+      buffer = 1.0,
+      max = 3.0,
+      on_connect = mark_live_connected,
+      on_disconnect = mark_live_disconnected,
+      password = icecast_password,
+      port = harbor_tls_port,
+      transport = harbor_tls_transport,
+      user = "source",
+      "/broadcast.mp3"
+    )
 
-live = fallback(track_sensitive = false, [live_tls, live_plain])
+    fallback(track_sensitive = false, [live_tls, live_plain])
+  else
+    live_plain
+  end
+end
+
+live = mk_live()
 
 def get_scheduled_request() =
   lines = process.read.lines("cat /media/schedule/current.txt 2>/dev/null")

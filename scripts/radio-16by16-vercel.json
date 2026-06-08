@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/live.mp3",
+      "destination": "https://rdio-api.fly.dev/live.mp3"
+    }
+  ]
+}

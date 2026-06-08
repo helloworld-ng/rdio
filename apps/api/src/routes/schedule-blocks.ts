@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { isListenerRequest, listenerScheduleBlocks } from "../lib/listener.js";
 import {
   detectBlockConflicts,
   readAllScheduleBlocks,
@@ -23,9 +24,13 @@ export function scheduleBlockRoutes(server: FastifyInstance) {
     }
 
     const { day } = params;
+    const blocks = await readScheduleBlocksForDay(day);
+
     return {
       day,
-      blocks: await readScheduleBlocksForDay(day),
+      blocks: isListenerRequest(request)
+        ? listenerScheduleBlocks(blocks)
+        : blocks,
       version: await scheduleVersion(),
     };
   });

@@ -1,28 +1,26 @@
-import { createReadStream } from "node:fs";
-import { mkdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import {
+  createPresignedMediaUpload,
+  deleteMediaObject,
+  headMediaObject,
+  mediaPublicUrl,
+} from "../lib/r2.js";
+import {
+  buildMediaItem,
   listMediaFiles,
-  mediaItemFromFile,
   readAllScheduleBlocks,
   refreshCurrentPlayout,
   sanitizeFileName,
   scheduleVersion,
   storedFileNameFor,
-  uploadDirectory,
   writeAllScheduleBlocks,
 } from "../lib/station-store.js";
+import { validateJsonBody, validateParams } from "../lib/validation.js";
 import {
-  validateHeaders,
-  validateParams,
-  validateValue,
-} from "../lib/validation.js";
-import {
-  firstHeaderValue,
+  mediaCompleteBodySchema,
   mediaParamsSchema,
-  mediaUploadBodySchema,
-  mediaUploadHeadersSchema,
+  mediaUploadUrlBodySchema,
 } from "../schemas/api.js";
 
 export function mediaRoutes(server: FastifyInstance) {
@@ -30,40 +28,46 @@ export function mediaRoutes(server: FastifyInstance) {
     media: await listMediaFiles(),
   }));
 
-  server.post("/", async (request, reply) => {
-    const body = validateValue(
+  server.post("/upload-url", async (request, reply) => {
+    const body = validateJsonBody(
       reply,
-      mediaUploadBodySchema,
-      request.body,
-      "Invalid request body"
+      mediaUploadUrlBodySchema,
+      request.body
     );
-    const headers = validateHeaders(
-      reply,
-      mediaUploadHeadersSchema,
-      request.headers
-    );
-    if (!(body && headers)) {
+    if (!body) {
       return;
     }
 
-    const rawFileName = headers["x-file-name"];
-    const originalName = sanitizeFileName(
-      firstHeaderValue(rawFileName) ?? "upload"
-    );
-    const contentType = firstHeaderValue(headers["content-type"]);
-    const fileName = storedFileNameFor(originalName);
+    const originalName = sanitizeFileName(body.fileName);
+    const mediaId = storedFileNameFor(originalName);
+    const upload = await createPresignedMediaUpload(mediaId, body.contentType);
 
-    await mkdir(uploadDirectory, { recursive: true });
-    await writeFile(path.join(uploadDirectory, fileName), body);
+    return reply.status(201).send(upload);
+  });
 
-    const media = mediaItemFromFile(
-      fileName,
-      body.length,
-      new Date(),
-      contentType
-    );
+  server.post("/complete", async (request, reply) => {
+    const body = validateJsonBody(reply, mediaCompleteBodySchema, request.body);
+    if (!body) {
+      return;
+    }
 
-    return reply.status(201).send({ media });
+    const mediaId = path.basename(body.mediaId);
+
+    try {
+      const object = await headMediaObject(mediaId);
+      const media = buildMediaItem({
+        mediaId,
+        size: object.size,
+        uploadedAt: object.uploadedAt,
+        contentType: object.contentType,
+      });
+
+      return reply.status(201).send({ media });
+    } catch {
+      return reply.status(404).send({
+        error: "Upload not found. Finish the R2 upload before completing.",
+      });
+    }
   });
 
   server.delete<{ Params: { mediaId: string } }>(
@@ -82,7 +86,7 @@ export function mediaRoutes(server: FastifyInstance) {
           : block
       );
 
-      await rm(path.join(uploadDirectory, safeMediaId), { force: true });
+      await deleteMediaObject(safeMediaId);
       await writeAllScheduleBlocks(updatedBlocks);
       await refreshCurrentPlayout();
       return { blocks: updatedBlocks, version: await scheduleVersion() };
@@ -98,17 +102,14 @@ export function mediaRoutes(server: FastifyInstance) {
       }
 
       const safeMediaId = path.basename(params.mediaId);
-      const filePath = path.join(uploadDirectory, safeMediaId);
-      const stats = await stat(filePath);
-      const media = mediaItemFromFile(
-        safeMediaId,
-        stats.size,
-        stats.birthtimeMs > 0 ? stats.birthtime : stats.mtime
-      );
 
-      return reply
-        .header("Content-Disposition", `inline; filename="${media.name}"`)
-        .send(createReadStream(filePath));
+      try {
+        await headMediaObject(safeMediaId);
+      } catch {
+        return reply.status(404).send({ error: "Media not found" });
+      }
+
+      return reply.redirect(mediaPublicUrl(safeMediaId), 302);
     }
   );
 }
