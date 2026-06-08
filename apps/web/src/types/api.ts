@@ -30,6 +30,12 @@ export interface MediaItemResponse {
   media: MediaItem;
 }
 
+export interface MediaUploadUrlResponse {
+  mediaId: string;
+  publicUrl: string;
+  uploadUrl: string;
+}
+
 export interface ScheduleBlocksResponse {
   blocks: ScheduleBlock[];
   version: string;

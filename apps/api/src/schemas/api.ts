@@ -1,3 +1,4 @@
+import { env } from "@rdio/env/server";
 import { z } from "zod";
 
 const dayKeyPattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -90,16 +91,19 @@ export const scheduleBlocksBodySchema = z.union([
   }),
 ]);
 
-export const mediaUploadBodySchema = z
-  .instanceof(Buffer)
-  .refine((body) => body.length > 0, "Expected a non-empty file body.");
-
-export const mediaUploadHeadersSchema = z
+export const mediaUploadUrlBodySchema = z
   .object({
-    "content-type": z.union([z.string(), z.array(z.string())]).optional(),
-    "x-file-name": z.union([z.string(), z.array(z.string())]).optional(),
+    contentType: z.string().trim().min(1).default("application/octet-stream"),
+    fileName: requiredString,
+    size: z.number().int().positive(),
   })
-  .passthrough();
+  .refine((body) => body.size <= env.MEDIA_UPLOAD_MAX_BYTES, {
+    message: `File exceeds the maximum upload size of ${env.MEDIA_UPLOAD_MAX_BYTES} bytes.`,
+  });
+
+export const mediaCompleteBodySchema = z.object({
+  mediaId: requiredString,
+});
 
 export function firstHeaderValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;

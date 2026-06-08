@@ -23,7 +23,7 @@ services:
       ICECAST_RELAY_PASSWORD: ${ICECAST_RELAY_PASSWORD:-relaypass}
       ICECAST_HOSTNAME: ${ICECAST_HOSTNAME:-localhost}
     ports:
-      - "8000:8000"
+      - "8002:8000"
 
   liquidsoap:
     image: savonet/liquidsoap:v2.2.5

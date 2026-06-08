@@ -25,6 +25,7 @@ export function MediaPreviewThumb({
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackError, setPlaybackError] = useState("");
   const src = apiBaseUrl ? resolveMediaUrl(url, apiBaseUrl) : url;
 
   if (type === "image") {
@@ -43,7 +44,11 @@ export function MediaPreviewThumb({
     }
 
     if (audio.paused) {
-      audio.play().catch(() => undefined);
+      setPlaybackError("");
+      audio.play().catch(() => {
+        setPlaybackError("Could not play this file.");
+        setIsPlaying(false);
+      });
       return;
     }
 
@@ -54,12 +59,24 @@ export function MediaPreviewThumb({
     <div className="file-preview-thumb is-audio">
       <audio
         onEnded={() => setIsPlaying(false)}
+        onError={() => {
+          setPlaybackError("Could not load this file.");
+          setIsPlaying(false);
+        }}
         onPause={() => setIsPlaying(false)}
-        onPlay={() => setIsPlaying(true)}
+        onPlay={() => {
+          setPlaybackError("");
+          setIsPlaying(true);
+        }}
         preload="metadata"
         ref={audioRef}
         src={src}
       />
+      {playbackError ? (
+        <span className="file-preview-error" title={playbackError}>
+          !
+        </span>
+      ) : null}
       <button
         aria-label={isPlaying ? `Pause ${name}` : `Play ${name}`}
         className="file-preview-play"

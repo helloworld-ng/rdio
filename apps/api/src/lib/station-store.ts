@@ -13,6 +13,7 @@ import { env } from "@rdio/env/server";
 import { findStation, type RadioStation } from "@rdio/rdio-core";
 import type { FastifyRequest } from "fastify";
 import { defaultStationId, stations } from "../stations.js";
+import { headMediaObject, listMediaObjects, mediaPublicUrl } from "./r2.js";
 
 const imageFileNamePattern = /\.(apng|avif|gif|jpe?g|png|svg|webp)$/i;
 const scheduleFileNamePattern = /^\d{4}-\d{2}-\d{2}\.json$/;
@@ -22,7 +23,6 @@ const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../../.."
 );
-export const uploadDirectory = path.join(repoRoot, "media/uploads");
 export const scheduleDirectory = path.join(repoRoot, "media/schedule");
 export const currentPlayoutFile = path.join(scheduleDirectory, "current.txt");
 const broadcastActiveFile = path.join(scheduleDirectory, "broadcast-active");
@@ -30,7 +30,6 @@ export const broadcastStatusFile = path.join(
   scheduleDirectory,
   "broadcast-status.txt"
 );
-const liquidsoapMediaRoot = "/media/uploads";
 const fallbackPlayoutPath = "/media/fallback/v1-tone.mp3";
 
 export type MediaType = "audio" | "image";
@@ -98,24 +97,28 @@ export function storedFileNameFor(originalName: string) {
   return `${Date.now()}-${randomUUID()}__${sanitizeFileName(originalName)}`;
 }
 
-/** Builds the public media metadata returned by the API for a locally stored file. */
-export function mediaItemFromFile(
-  fileName: string,
-  size: number,
-  uploadedAt: Date,
-  contentType?: string
-): MediaFile {
-  const name = fileName.includes("__")
-    ? fileName.split("__").slice(1).join("__")
-    : fileName;
+function displayNameForMediaId(mediaId: string) {
+  return mediaId.includes("__")
+    ? mediaId.split("__").slice(1).join("__")
+    : mediaId;
+}
+
+/** Builds the public media metadata returned by the API for an R2 object. */
+export function buildMediaItem(input: {
+  contentType?: string;
+  mediaId: string;
+  size: number;
+  uploadedAt: Date;
+}): MediaFile {
+  const name = displayNameForMediaId(input.mediaId);
 
   return {
-    id: fileName,
+    id: input.mediaId,
     name,
-    size,
-    type: inferMediaType(name, contentType),
-    uploadedAt: uploadedAt.toISOString(),
-    url: `/media/${encodeURIComponent(fileName)}`,
+    size: input.size,
+    type: inferMediaType(name, input.contentType),
+    uploadedAt: input.uploadedAt.toISOString(),
+    url: mediaPublicUrl(input.mediaId),
   };
 }
 
@@ -429,18 +432,14 @@ export async function refreshCurrentPlayout() {
 
   await rm(broadcastActiveFile, { force: true });
 
-  // Otherwise play the scheduled recording file
+  // Otherwise play the scheduled recording from its public R2 URL.
   const block = currentMediaBlock(todayBlocks, station);
   const mediaId = block?.mediaId ? path.basename(block.mediaId) : "";
-  const hostPath = mediaId ? path.join(uploadDirectory, mediaId) : "";
-  const liquidsoapPath = mediaId
-    ? path.posix.join(liquidsoapMediaRoot, mediaId)
-    : "";
 
   try {
-    if (hostPath) {
-      await stat(hostPath);
-      await writeFile(currentPlayoutFile, `${liquidsoapPath}\n`);
+    if (mediaId) {
+      await headMediaObject(mediaId);
+      await writeFile(currentPlayoutFile, `${mediaPublicUrl(mediaId)}\n`);
       return;
     }
   } catch {
@@ -450,27 +449,23 @@ export async function refreshCurrentPlayout() {
   await writeFile(currentPlayoutFile, `${fallbackPlayoutPath}\n`);
 }
 
-/** Lists uploaded local media files in newest-first order. */
+/** Lists uploaded media objects from R2 in newest-first order. */
 export async function listMediaFiles(): Promise<MediaFile[]> {
-  await mkdir(uploadDirectory, { recursive: true });
-  const fileNames = await readdir(uploadDirectory);
-  const mediaFiles = await Promise.all(
-    fileNames
-      .filter((fileName) => !fileName.startsWith("."))
-      .map(async (fileName) => {
-        const stats = await stat(path.join(uploadDirectory, fileName));
-        return mediaItemFromFile(
-          fileName,
-          stats.size,
-          stats.birthtimeMs > 0 ? stats.birthtime : stats.mtime
-        );
-      })
-  );
+  const objects = await listMediaObjects();
 
-  return mediaFiles.sort(
-    (a, b) =>
-      new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
-  );
+  return objects
+    .map((object) =>
+      buildMediaItem({
+        mediaId: object.mediaId,
+        size: object.size,
+        uploadedAt: object.uploadedAt,
+        contentType: object.contentType,
+      })
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+    );
 }
 
 function icecastSettings(mount: string) {
