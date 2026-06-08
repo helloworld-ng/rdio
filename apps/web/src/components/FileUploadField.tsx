@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo } from "react";
-import { MediaPreviewThumb } from "./MediaPreviewThumb";
+import { MediaPreviewThumb } from "@/components/schedule/media-preview-thumb";
 
 function inferFilePreviewType(file: File): "audio" | "image" {
   return file.type.startsWith("image/") ? "image" : "audio";

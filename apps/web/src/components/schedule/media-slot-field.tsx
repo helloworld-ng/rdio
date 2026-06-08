@@ -1,8 +1,8 @@
 import { RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef } from "react";
-import { MediaPreviewThumb } from "@/components/MediaPreviewThumb";
-import { MediaSearchSelect } from "@/components/MediaSearchSelect";
+import { MediaPreviewThumb } from "@/components/schedule/media-preview-thumb";
+import { MediaSearchSelect } from "@/components/schedule/media-search-select";
 import { API_BASE_URL } from "@/lib/constants";
 import { formatFileSize } from "@/utils/media";
 
@@ -145,7 +145,7 @@ export function MediaSlotField({
       )}
       <input
         accept="audio/*,image/*"
-        className="media-search-upload-input"
+        className="hidden"
         onChange={(event) => {
           const nextFile = event.target.files?.[0] ?? null;
           event.target.value = "";

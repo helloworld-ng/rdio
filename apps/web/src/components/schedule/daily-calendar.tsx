@@ -10,9 +10,9 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { MediaSlotField } from "@/components/MediaSlotField";
-import { ProgramSearchSelect } from "@/components/ProgramSearchSelect";
 import { HostMultiSelect } from "@/components/schedule/host-multi-select";
+import { MediaSlotField } from "@/components/schedule/media-slot-field";
+import { ProgramSearchSelect } from "@/components/schedule/program-search-select";
 import { mediaUrl } from "@/lib/api";
 import type {
   CreationRequest,

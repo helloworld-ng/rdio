@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { ListMusic, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { MediaPreviewThumb } from "@/components/MediaPreviewThumb";
 import { UploadMediaDialog } from "@/components/media/upload-media-dialog";
+import { MediaPreviewThumb } from "@/components/schedule/media-preview-thumb";
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog";
 import { API_BASE_URL } from "@/lib/constants";
 import {
