@@ -8,18 +8,16 @@ import {
 } from "../lib/r2.js";
 import {
   buildMediaItem,
+  commitScheduleBlocks,
   listMediaFiles,
   readAllScheduleBlocks,
-  refreshCurrentPlayout,
   sanitizeFileName,
   scheduleVersion,
   storedFileNameFor,
-  writeAllScheduleBlocks,
 } from "../lib/station-store.js";
-import { validateJsonBody, validateParams } from "../lib/validation.js";
+import { validateJsonBody } from "../lib/validation.js";
 import {
   mediaCompleteBodySchema,
-  mediaParamsSchema,
   mediaUploadUrlBodySchema,
 } from "../schemas/api.js";
 
@@ -70,46 +68,42 @@ export function mediaRoutes(server: FastifyInstance) {
     }
   });
 
-  server.delete<{ Params: { mediaId: string } }>(
-    "/:mediaId",
-    async (request, reply) => {
-      const params = validateParams(reply, mediaParamsSchema, request.params);
-      if (!params) {
-        return;
-      }
+  server.delete<{ Params: { "*": string } }>("/*", async (request, reply) => {
+    const safeMediaId = path.basename(
+      decodeURIComponent(request.params["*"] ?? "")
+    );
 
-      const safeMediaId = path.basename(params.mediaId);
-      const blocks = await readAllScheduleBlocks();
-      const updatedBlocks = blocks.map((block) =>
-        block.mediaId === safeMediaId
-          ? { ...block, mediaId: undefined, file: undefined }
-          : block
-      );
-
-      await deleteMediaObject(safeMediaId);
-      await writeAllScheduleBlocks(updatedBlocks);
-      await refreshCurrentPlayout();
-      return { blocks: updatedBlocks, version: await scheduleVersion() };
+    if (!safeMediaId) {
+      return reply.status(404).send({ error: "Media not found" });
     }
-  );
 
-  server.get<{ Params: { mediaId: string } }>(
-    "/:mediaId",
-    async (request, reply) => {
-      const params = validateParams(reply, mediaParamsSchema, request.params);
-      if (!params) {
-        return;
-      }
+    const blocks = await readAllScheduleBlocks();
+    const updatedBlocks = blocks.map((block) =>
+      block.mediaId === safeMediaId
+        ? { ...block, mediaId: undefined, file: undefined }
+        : block
+    );
 
-      const safeMediaId = path.basename(params.mediaId);
+    await deleteMediaObject(safeMediaId);
+    await commitScheduleBlocks(updatedBlocks, "media-delete");
+    return { blocks: updatedBlocks, version: await scheduleVersion() };
+  });
 
-      try {
-        await headMediaObject(safeMediaId);
-      } catch {
-        return reply.status(404).send({ error: "Media not found" });
-      }
+  server.get<{ Params: { "*": string } }>("/*", async (request, reply) => {
+    const safeMediaId = path.basename(
+      decodeURIComponent(request.params["*"] ?? "")
+    );
 
-      return reply.redirect(mediaPublicUrl(safeMediaId), 302);
+    if (!safeMediaId) {
+      return reply.status(404).send({ error: "Media not found" });
     }
-  );
+
+    try {
+      await headMediaObject(safeMediaId);
+    } catch {
+      return reply.status(404).send({ error: "Media not found" });
+    }
+
+    return reply.redirect(mediaPublicUrl(safeMediaId), 302);
+  });
 }

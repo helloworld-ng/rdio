@@ -63,5 +63,12 @@ cat > /etc/icecast2/icecast.xml <<EOF
 EOF
 
 icecast2 -c /etc/icecast2/icecast.xml &
+mkdir -p /media/schedule /media/uploads /media/fallback /media/cache
+if [ ! -f /media/schedule/playout-state.tsv ]; then
+  printf '0\tfallback\t/media/fallback/v1-tone.mp3\n' > /media/schedule/playout-state.tsv
+fi
+if [ ! -f /media/schedule/current.txt ]; then
+  printf '%s\n' "/media/fallback/v1-tone.mp3" > /media/schedule/current.txt
+fi
 liquidsoap /rdio/station.liq &
 exec node /app/dist/server.js

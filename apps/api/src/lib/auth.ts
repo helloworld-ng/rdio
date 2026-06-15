@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 const apiPrefixPattern = /^\/api(?=\/|$)/;
 const scheduleDayPathPattern = /^\/schedule-blocks\/\d{4}-\d{2}-\d{2}$/;
-const mediaItemPathPattern = /^\/media\/[^/]+$/;
+const mediaItemPathPattern = /^\/media\/.+/;
 
 function stripApiPrefix(pathname: string) {
   return pathname.replace(apiPrefixPattern, "") || "/";
@@ -25,6 +25,7 @@ function isPublicRequest(method: string, url: string) {
     pathname === "/station" ||
     pathname === "/schedule" ||
     pathname === "/now-playing" ||
+    pathname.startsWith("/playout/track/") ||
     pathname === "/live.mp3" ||
     pathname === "/broadcast/status" ||
     scheduleDayPathPattern.test(pathname) ||

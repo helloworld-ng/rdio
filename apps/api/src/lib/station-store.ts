@@ -13,7 +13,14 @@ import { env } from "@rdio/env/server";
 import { findStation, type RadioStation } from "@rdio/rdio-core";
 import type { FastifyRequest } from "fastify";
 import { defaultStationId, stations } from "../stations.js";
-import { headMediaObject, listMediaObjects, mediaPublicUrl } from "./r2.js";
+import { ensureMediaCached } from "./media-cache.js";
+import { logPlayoutEvent } from "./playout-log.js";
+import {
+  currentPlayoutFile,
+  playoutStateFile,
+  writePlayoutState,
+} from "./playout-state.js";
+import { listMediaObjects, mediaPublicUrl } from "./r2.js";
 
 const imageFileNamePattern = /\.(apng|avif|gif|jpe?g|png|svg|webp)$/i;
 const scheduleFileNamePattern = /^\d{4}-\d{2}-\d{2}\.json$/;
@@ -24,7 +31,8 @@ const repoRoot = path.resolve(
   "../../../.."
 );
 export const scheduleDirectory = path.join(repoRoot, "media/schedule");
-export const currentPlayoutFile = path.join(scheduleDirectory, "current.txt");
+export { currentPlayoutFile, playoutStateFile } from "./playout-state.js";
+
 const broadcastActiveFile = path.join(scheduleDirectory, "broadcast-active");
 export const broadcastStatusFile = path.join(
   scheduleDirectory,
@@ -326,7 +334,7 @@ export async function writeAllScheduleBlocks(blocks: ScheduleBlock[]) {
   }
 }
 
-function stationClock(station: RadioStation, at = new Date()) {
+export function stationClock(station: RadioStation, at = new Date()) {
   const parts = new Intl.DateTimeFormat("en-US", {
     day: "2-digit",
     hour: "2-digit",
@@ -415,38 +423,171 @@ function upcomingScheduleBlocks(
     .slice(0, limit);
 }
 
-/** Updates Liquidsoap's playout pointer for the currently active schedule block. */
-export async function refreshCurrentPlayout() {
+let playoutRefreshChain: Promise<void> = Promise.resolve();
+let playoutTaskSerial = 0;
+
+async function applyCurrentPlayout(
+  todayBlocks: ScheduleBlock[],
+  source: string,
+  taskSerial: number
+) {
   const station = defaultStation();
-  const { dateKey } = stationClock(station);
-  const todayBlocks = await readScheduleBlocksForDay(dateKey);
+  const { dateKey, minutes } = stationClock(station);
 
   await mkdir(scheduleDirectory, { recursive: true });
 
-  // Broadcast block takes priority — write sentinel so Liquidsoap switches to live source
-  if (currentBroadcastBlock(todayBlocks, station)) {
+  const broadcastBlock = currentBroadcastBlock(todayBlocks, station);
+  if (broadcastBlock) {
+    await logPlayoutEvent("playout_apply", {
+      source,
+      taskSerial,
+      dateKey,
+      minutes,
+      mode: "broadcast",
+      blockId: broadcastBlock.id,
+      todayBlockCount: todayBlocks.length,
+    });
     await writeFile(broadcastActiveFile, "1\n");
-    await writeFile(currentPlayoutFile, "broadcast\n");
+    await writePlayoutState(
+      { mode: "broadcast", target: "broadcast", blockId: broadcastBlock.id },
+      { source }
+    );
     return;
   }
 
-  await rm(broadcastActiveFile, { force: true });
-
-  // Otherwise play the scheduled recording from its public R2 URL.
   const block = currentMediaBlock(todayBlocks, station);
   const mediaId = block?.mediaId ? path.basename(block.mediaId) : "";
 
-  try {
-    if (mediaId) {
-      await headMediaObject(mediaId);
-      await writeFile(currentPlayoutFile, `${mediaPublicUrl(mediaId)}\n`);
-      return;
-    }
-  } catch {
-    // Fall through to silence the scheduled source and let Liquidsoap use fallback.
+  if (mediaId) {
+    const cachePath = await ensureMediaCached(mediaId);
+    await logPlayoutEvent("playout_apply", {
+      source,
+      taskSerial,
+      dateKey,
+      minutes,
+      mode: "recording",
+      blockId: block?.id,
+      mediaId,
+      cachePath,
+      todayBlockCount: todayBlocks.length,
+    });
+    await writePlayoutState(
+      {
+        mode: "recording",
+        target: cachePath,
+        mediaId,
+        blockId: block?.id,
+      },
+      { source }
+    );
+    await rm(broadcastActiveFile, { force: true });
+    return;
   }
 
-  await writeFile(currentPlayoutFile, `${fallbackPlayoutPath}\n`);
+  await logPlayoutEvent("playout_apply", {
+    source,
+    taskSerial,
+    dateKey,
+    minutes,
+    mode: "fallback",
+    todayBlockCount: todayBlocks.length,
+    recordingBlocks: todayBlocks
+      .filter((entry) => entry.kind === "recording")
+      .map((entry) => ({
+        id: entry.id,
+        startMinutes: entry.startMinutes,
+        endMinutes: entry.endMinutes,
+      })),
+  });
+  await writePlayoutState(
+    { mode: "fallback", target: fallbackPlayoutPath },
+    { source }
+  );
+  await rm(broadcastActiveFile, { force: true });
+}
+
+function todayBlocksFromAll(blocks: ScheduleBlock[], station: RadioStation) {
+  const { dateKey } = stationClock(station);
+  return blocks.filter((block) => block.dateKey === dateKey);
+}
+
+/** Persists schedule blocks and refreshes playout in one serialized step. */
+export async function commitScheduleBlocks(
+  blocks: ScheduleBlock[],
+  source = "schedule-save"
+) {
+  const taskSerial = ++playoutTaskSerial;
+
+  await logPlayoutEvent("playout_task_queued", {
+    source,
+    taskSerial,
+    totalBlocks: blocks.length,
+  });
+
+  playoutRefreshChain = playoutRefreshChain
+    .then(async () => {
+      await logPlayoutEvent("playout_task_start", {
+        source,
+        taskSerial,
+      });
+      await writeAllScheduleBlocks(blocks);
+      await applyCurrentPlayout(
+        todayBlocksFromAll(blocks, defaultStation()),
+        source,
+        taskSerial
+      );
+      await logPlayoutEvent("playout_task_done", {
+        source,
+        taskSerial,
+      });
+    })
+    .catch((error: unknown) => {
+      console.error(error);
+      void logPlayoutEvent("playout_task_error", {
+        source,
+        taskSerial,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+
+  await playoutRefreshChain;
+}
+
+/** Updates Liquidsoap's playout pointer for the currently active schedule block. */
+export async function refreshCurrentPlayout(source = "interval") {
+  const taskSerial = ++playoutTaskSerial;
+
+  await logPlayoutEvent("playout_task_queued", {
+    source,
+    taskSerial,
+  });
+
+  playoutRefreshChain = playoutRefreshChain
+    .then(async () => {
+      await logPlayoutEvent("playout_task_start", {
+        source,
+        taskSerial,
+      });
+      const station = defaultStation();
+      const { dateKey } = stationClock(station);
+      const todayBlocks = await readScheduleBlocksForDay(dateKey);
+
+      await applyCurrentPlayout(todayBlocks, source, taskSerial);
+      await logPlayoutEvent("playout_task_done", {
+        source,
+        taskSerial,
+      });
+    })
+    .catch((error: unknown) => {
+      console.error(error);
+      void logPlayoutEvent("playout_task_error", {
+        source,
+        taskSerial,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+
+  await playoutRefreshChain;
 }
 
 /** Lists uploaded media objects from R2 in newest-first order. */
@@ -665,5 +806,5 @@ export async function initializePlayout(log: {
     // No legacy file to migrate.
   }
 
-  await refreshCurrentPlayout();
+  await refreshCurrentPlayout("init");
 }

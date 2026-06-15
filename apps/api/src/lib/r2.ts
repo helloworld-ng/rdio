@@ -1,5 +1,6 @@
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
@@ -35,9 +36,20 @@ export function mediaObjectKey(mediaId: string) {
   return `${uploadsPrefix}${mediaId}`;
 }
 
+/** Loopback URL Liquidsoap uses to stream a media object from the API. */
+export function mediaPlayoutUrl(mediaId: string) {
+  return `http://127.0.0.1:${env.API_PORT}/api/playout/track/${encodeURIComponent(mediaId)}`;
+}
+
 /** Public browser URL for a stored media object. */
 export function mediaPublicUrl(mediaId: string) {
-  return `${trimTrailingSlash(env.R2_PUBLIC_URL)}/${mediaObjectKey(mediaId)}`;
+  const key = mediaObjectKey(mediaId);
+  const encodedKey = key
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+  return `${trimTrailingSlash(env.R2_PUBLIC_URL)}/${encodedKey}`;
 }
 
 /** Parses a media id from an R2 object key, if it is an upload object. */
@@ -127,6 +139,16 @@ export async function listMediaObjects() {
   } while (continuationToken);
 
   return objects;
+}
+
+/** Opens a readable R2 object body for streaming playout. */
+export async function openMediaObjectBody(mediaId: string) {
+  return r2Client().send(
+    new GetObjectCommand({
+      Bucket: env.R2_BUCKET,
+      Key: mediaObjectKey(mediaId),
+    })
+  );
 }
 
 /** Deletes a media object from R2. */

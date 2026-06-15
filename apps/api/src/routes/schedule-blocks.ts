@@ -1,12 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { isListenerRequest, listenerScheduleBlocks } from "../lib/listener.js";
+import { logPlayoutEvent } from "../lib/playout-log.js";
 import {
+  commitScheduleBlocks,
   detectBlockConflicts,
   readAllScheduleBlocks,
   readScheduleBlocksForDay,
-  refreshCurrentPlayout,
   scheduleVersion,
-  writeAllScheduleBlocks,
 } from "../lib/station-store.js";
 import { validateJsonBody, validateParams } from "../lib/validation.js";
 import { dayParamsSchema, scheduleBlocksBodySchema } from "../schemas/api.js";
@@ -65,8 +65,14 @@ export function scheduleBlockRoutes(server: FastifyInstance) {
       });
     }
 
-    await writeAllScheduleBlocks(blocks);
-    await refreshCurrentPlayout();
+    await logPlayoutEvent("schedule_put", {
+      totalBlocks: blocks.length,
+      expectedVersion: expectedVersion ?? null,
+      recordingBlockIds: blocks
+        .filter((block) => block.kind === "recording")
+        .map((block) => block.id),
+    });
+    await commitScheduleBlocks(blocks);
     return reply.send({ blocks, version: await scheduleVersion() });
   });
 }
