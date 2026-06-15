@@ -57,9 +57,18 @@ export function useSaveScheduleBlocks() {
 
       return data;
     },
-    onSuccess: () =>
+    onSuccess: (data) => {
+      if (data.blocks && typeof data.version === "string") {
+        queryClient.setQueryData(queryKeys.scheduleBlocks.all.queryKey, {
+          blocks: data.blocks,
+          version: data.version,
+        });
+        return;
+      }
+
       queryClient.invalidateQueries({
         queryKey: queryKeys.scheduleBlocks.all.queryKey,
-      }),
+      });
+    },
   });
 }
