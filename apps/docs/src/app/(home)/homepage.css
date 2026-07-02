@@ -1,0 +1,37 @@
+.rdio-homepage {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.rdio-float-slow {
+  animation: float-slow 4s ease-in-out infinite;
+}
+
+.rdio-homepage .rdio-primary-button {
+  color: #fff !important;
+  background: linear-gradient(180deg, #2aa1b6 0%, #1e7c8d 100%) !important;
+  border-color: #2aa7bd !important;
+  box-shadow: 0 4px 15px rgba(42, 161, 182, 0.3) !important;
+}
+
+.rdio-homepage .rdio-primary-button:hover {
+  color: #fff !important;
+  background: linear-gradient(180deg, #32b3c9 0%, #248a9c 100%) !important;
+  border-color: #2aa7bd !important;
+  box-shadow: 0 6px 20px rgba(42, 161, 182, 0.45) !important;
+}
+
+.rdio-homepage .footer-theme-switch [data-theme-toggle] {
+  color: inherit;
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
+}

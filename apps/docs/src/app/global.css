@@ -1,0 +1,23 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+@theme static {
+  --color-rdio-primary: #2aa1b6;
+  --color-rdio-primary-bright: #32b3c9;
+  --color-rdio-primary-dark: #1e7c8d;
+  --color-rdio-secondary: #14b8a6;
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+.rdio-brand-dot {
+  color: var(--color-rdio-primary);
+}
+
+html > body[data-scroll-locked] {
+  --removed-body-scroll-bar-size: 0px !important;
+  margin-right: 0px !important;
+}
