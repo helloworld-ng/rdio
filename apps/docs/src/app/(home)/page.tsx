@@ -6,7 +6,7 @@ const githubUrl = "https://github.com/helloworld-ng/rdio";
 const pageContainerClassName =
   "mx-auto w-full max-w-[1800px] px-[18px] sm:px-6 md:px-10";
 const meshSectionClassName =
-  "relative bg-transparent before:pointer-events-none before:absolute before:inset-0 before:z-0 before:[background-image:linear-gradient(var(--color-fd-border)_1px,transparent_1px),linear-gradient(90deg,var(--color-fd-border)_1px,transparent_1px)] before:[background-size:56px_56px] before:opacity-70 dark:before:opacity-60";
+  "relative bg-transparent before:pointer-events-none before:absolute before:inset-0 before:z-0 before:[background-image:linear-gradient(var(--color-fd-border)_1px,transparent_1px),linear-gradient(90deg,var(--color-fd-border)_1px,transparent_1px)] before:[background-size:72px_72px] before:opacity-35 dark:before:opacity-30";
 const primaryButtonClassName =
   "rdio-primary-button inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full border px-6 py-2.5 font-semibold text-sm transition-transform duration-150 hover:-translate-y-px";
 const secondaryButtonClassName =
@@ -14,16 +14,16 @@ const secondaryButtonClassName =
 
 const features = [
   {
-    title: "Lossless Streaming",
-    text: "We ensure your signal remains uninterrupted across 5G, Wi-Fi, and low-bandwidth environments.",
+    title: "Schedule your station",
+    text: "Plan programs and recordings by day, then let rdio refresh the active playout file when the schedule changes.",
   },
   {
-    title: "Live Participation",
-    text: "Integrated chat and request modules allow listeners to engage directly with the host in real-time.",
+    title: "Go live when needed",
+    text: "Create live broadcast blocks and hand off to a BUTT/Icecast-compatible source without changing the public listener stream.",
   },
   {
-    title: "Intelligent Discovery and more...",
-    text: "Our algorithm maps listener preferences to discover niche channels that resonate with their specific taste profile.",
+    title: "Own the stack",
+    text: "Run the admin app, API, Postgres, Liquidsoap, and Icecast yourself. rdio gives you the control plane, not a hosted platform.",
   },
 ] as const;
 
@@ -126,15 +126,17 @@ export default function HomePage() {
             <div className="grid items-start gap-5 lg:grid-cols-[1.3fr_1fr] lg:items-end lg:gap-[60px]">
               <div className="flex flex-col">
                 <h1 className="font-medium text-[2.4rem] leading-[1.1] md:text-[2.8rem] lg:text-[3.8rem]">
-                  Radio as it
+                  A self-hosted
                   <br />
-                  should be
+                  control room for
+                  <br />
+                  internet radio
                 </h1>
               </div>
               <div className="flex justify-start pb-0 lg:justify-end lg:pb-3">
                 <p className="max-w-[440px] text-left text-[1.15rem] text-fd-muted-foreground leading-[1.7] lg:text-right">
-                  rdio connects you to thousands of independent broadcasters
-                  sharing music, stories, and global perspectives in real-time.
+                  Schedule programs, manage media, hand off to live broadcasts,
+                  and keep a single station running from your own server.
                 </p>
               </div>
             </div>
@@ -156,20 +158,21 @@ export default function HomePage() {
         <div className="relative z-10 mx-auto w-full max-w-[1800px]">
           <div className="grid gap-1 overflow-visible rounded-b-lg border-fd-background border-t-0 border-r-4 border-b-4 border-l-4 bg-fd-background md:grid-cols-2 lg:grid-cols-3">
             <div className="col-span-full flex flex-col gap-6 px-[18px] py-12 sm:px-6 md:px-10 lg:flex-row lg:items-end lg:justify-between lg:gap-10 lg:py-16">
-              <h2 className="font-medium text-[2.4rem] leading-[1.1] md:text-[2.8rem] lg:text-[3.8rem]">
-                Pure signal.
+              <h2 className="font-medium text-[2rem] leading-[1.1] md:text-[2.5rem] lg:text-[3rem]">
+                Everything you need
                 <br />
-                Infinite reach.
+                to stay on air.
               </h2>
               <p className="max-w-[440px] text-left text-[1.1rem] text-fd-muted-foreground leading-[1.6] lg:text-right">
-                rdio connects you to thousands of independent broadcasters
-                sharing music, stories, and global perspectives in real-time.
+                rdio combines the station admin UI, schedule automation, live
+                broadcast handoff, and stream delivery glue into one self-hosted
+                stack.
               </p>
             </div>
 
             {features.map((feature) => (
               <div
-                className="relative z-0 flex flex-col justify-between bg-fd-card px-6 py-9 transition-all duration-300 hover:z-10 hover:shadow-[0_16px_40px_rgba(0,0,0,0.14)] md:min-h-[320px] md:px-8 md:py-12 last:md:col-span-2 last:lg:col-span-1 dark:hover:shadow-[0_16px_40px_rgba(0,0,0,0.5)]"
+                className="relative z-0 flex flex-col justify-between bg-fd-card px-6 py-9 md:min-h-[260px] md:px-8 md:py-12 last:md:col-span-2 last:lg:col-span-1"
                 key={feature.title}
               >
                 <div className="flex flex-col">
@@ -180,15 +183,6 @@ export default function HomePage() {
                     {feature.text}
                   </p>
                 </div>
-                <a
-                  className={`${secondaryButtonClassName} mt-8`}
-                  href={githubUrl}
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  <GitHubIcon size={16} />
-                  GitHub
-                </a>
               </div>
             ))}
           </div>
