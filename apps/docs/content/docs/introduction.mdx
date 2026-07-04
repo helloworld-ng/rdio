@@ -1,0 +1,126 @@
+---
+title: Introduction
+description: Learn what rdio is, how it works, and where it fits in an internet radio stack.
+---
+
+rdio is an all-in-one control room for running a single internet radio station from your own infrastructure.
+
+It gives station operators a web admin UI for the parts of radio that usually end up spread across scripts, calendar notes, file folders, and streaming server configuration: scheduling, media, programs, hosts, live broadcast handoff, and stream delivery.
+
+rdio is not a hosted radio platform. You run it yourself, keep control of your files and listeners, and use proven radio infrastructure underneath.
+
+## Why it exists
+
+Internet radio stacks are powerful, but the daily operations are often scattered. You may have Icecast serving the stream, Liquidsoap handling automation, a folder of files, a calendar for shows, a separate list of hosts, and a few shell scripts that only one person understands.
+
+rdio gives those pieces a control surface. The goal is not to replace Icecast or Liquidsoap. The goal is to make them easier to operate as a station.
+
+## What rdio does
+
+rdio sits between your station team and the audio services that keep the stream online.
+
+- **Schedule programs and recordings** by day, with blocks that can point to uploaded media or live broadcast slots.
+- **Manage station content** including programs, hosts, media files, members, and station settings.
+- **Hand off to live broadcasters** using BUTT or another Icecast-compatible source client.
+- **Keep the public stream stable** while scheduled playback, fallback audio, and live inputs change behind the scenes.
+- **Run the stack yourself** with a TypeScript admin app, Fastify API, Postgres, Liquidsoap, and Icecast.
+
+## How it works
+
+rdio has two jobs:
+
+1. Give station staff a web UI for managing the station.
+2. Keep the audio pipeline pointed at the right source.
+
+The audio pipeline is intentionally built on common radio tools. rdio does the application work, Liquidsoap does the playout logic, and Icecast serves the stream.
+
+### 1. The admin UI manages station state
+
+The web app is where administrators plan the schedule, upload media, manage programs and hosts, create members, and view live broadcast settings.
+
+When a schedule block changes, the admin UI sends that change to the API. The API stores the station data and refreshes the active playout state.
+
+### 2. The API chooses the current source
+
+The API looks at the station schedule and decides what should be active right now:
+
+- a recorded media file
+- a live broadcast window
+- the fallback source
+
+It writes that decision to a small playout state file that Liquidsoap can read. That file includes a revision, the current mode, and the target source.
+
+### 3. Liquidsoap switches between modes
+
+Liquidsoap watches the playout state and builds the actual audio source.
+
+- In **recording mode**, it plays the scheduled media file.
+- In **broadcast mode**, it listens for a live source on the broadcast input.
+- In **fallback mode**, it plays the configured fallback file so the station has something on air.
+
+For live shows, a host connects with BUTT or another Icecast-compatible source client. They connect to Liquidsoap's broadcast input, not directly to the public listener mount.
+
+### 4. Icecast serves the public stream
+
+Liquidsoap publishes one stable output to Icecast at the station mount, usually `/live.mp3`.
+
+Listeners keep using the same stream URL while rdio, Liquidsoap, and the station team change what is currently feeding that stream.
+
+```txt
+Admin UI
+  -> API
+  -> playout state
+  -> Liquidsoap
+  -> Icecast
+  -> public stream
+```
+
+That separation is the main idea: rdio handles station operations, Liquidsoap handles audio switching, and Icecast handles delivery.
+
+## Core concepts
+
+### Station
+
+rdio is currently built around one station. The station config defines the station name, timezone, stream mount, fallback source, and related defaults.
+
+### Schedule blocks
+
+Schedule blocks describe what should happen at a specific time. A block can represent a recording, a program slot, or a live broadcast window. Updating the schedule refreshes the active playout pointer.
+
+### Media
+
+Uploaded files can be attached to scheduled blocks. rdio keeps track of the media library and refreshes playout when media changes affect the active schedule.
+
+### Live broadcast
+
+Live blocks tell Liquidsoap to switch to a broadcast input. A presenter connects with BUTT using the broadcast settings shown in the admin UI, while listeners stay on the same public stream URL.
+
+### Members
+
+rdio includes authentication and member management so station administrators can create accounts and control access to the admin UI.
+
+## What rdio is good for
+
+rdio is a fit when you want a small station control surface without giving up your infrastructure.
+
+- A community radio station with scheduled shows and occasional live hosts.
+- A studio or collective that wants one place to manage programming, media, and stream state.
+- A developer-run station where the team wants to own deployment, storage, and integrations.
+- A self-hosted setup that needs a friendlier layer over Liquidsoap and Icecast.
+
+## What rdio is not
+
+rdio is not a marketplace, directory, or managed streaming service. It does not host your station for you, manage your legal obligations, or control independent deployments.
+
+If you run rdio, you are responsible for your deployment, media, users, infrastructure, backups, stream availability, and any laws that apply to your station.
+
+## Next steps
+
+Start with the repository README while these docs are being expanded:
+
+- Install dependencies with `pnpm install`.
+- Start local infrastructure with `docker compose up`.
+- Run the apps with `pnpm dev`.
+- Open the admin UI at `http://localhost:5173`.
+
+The docs will grow from here into setup, deployment, scheduling, live broadcast, and operations guides.

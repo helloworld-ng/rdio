@@ -8,13 +8,21 @@ import {
 } from "fumadocs-ui/layouts/docs/page";
 import { createRelativeLink } from "fumadocs-ui/mdx";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getMDXComponents } from "@/components/mdx";
 import { gitConfig } from "@/lib/shared";
 import { getPageImage, getPageMarkdownUrl, source } from "@/lib/source";
 
+const introductionUrl = "/docs/introduction";
+const introductionDescription =
+  "Learn what rdio is, how it works, and where it fits in an internet radio stack.";
+
 export default async function Page(props: PageProps<"/docs/[[...slug]]">) {
   const params = await props.params;
+  if (!params.slug) {
+    redirect(introductionUrl);
+  }
+
   const page = source.getPage(params.slug);
   if (!page) {
     notFound();
@@ -56,6 +64,13 @@ export async function generateMetadata(
   props: PageProps<"/docs/[[...slug]]">
 ): Promise<Metadata> {
   const params = await props.params;
+  if (!params.slug) {
+    return {
+      title: "Introduction",
+      description: introductionDescription,
+    };
+  }
+
   const page = source.getPage(params.slug);
   if (!page) {
     notFound();
