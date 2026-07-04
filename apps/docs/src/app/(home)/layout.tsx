@@ -9,8 +9,8 @@ const figtree = Figtree({
 
 const homeDescription =
   "Schedule programs, manage media, hand off to live broadcasts, and keep a single internet radio station running from your own server.";
-const homeTitle = "Self-hosted internet radio";
-const socialTitle = `${SITE.title} - self-hosted internet radio`;
+const homeTitle = "All-in-one internet radio";
+const socialTitle = `${SITE.title} - all-in-one internet radio`;
 
 export const metadata: Metadata = {
   description: homeDescription,
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     images: [
       {
         alt: SITE.title,
-        height: 630,
+        height: 620,
         url: SITE.image,
         width: 1200,
       },

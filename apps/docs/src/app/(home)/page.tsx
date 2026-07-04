@@ -106,7 +106,7 @@ export default function HomePage() {
             <div className="grid items-start gap-5 lg:grid-cols-[1.3fr_1fr] lg:items-end lg:gap-[60px]">
               <div className="flex flex-col">
                 <h1 className="font-medium text-[2.4rem] leading-[1.1] md:text-[2.8rem] lg:text-[3.8rem]">
-                  A self-hosted
+                  An all-in-one
                   <br />
                   control room for
                   <br />
