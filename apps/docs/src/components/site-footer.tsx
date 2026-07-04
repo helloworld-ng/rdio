@@ -7,7 +7,13 @@ export function SiteFooter({ className = "" }: { className?: string }) {
   return (
     <footer className={`relative z-10 bg-fd-background py-12 ${className}`}>
       <div className="mx-auto flex w-full max-w-[1800px] flex-col gap-6 px-[18px] sm:px-6 md:px-10">
-        <div className="flex flex-col items-start gap-6 md:flex-row md:flex-wrap md:items-center md:justify-between">
+        <div className="flex justify-end">
+          <FooterThemeSwitch />
+        </div>
+        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <p className="text-[0.85rem] text-fd-muted-foreground">
+            &copy; 2026 Moonlight Studios.
+          </p>
           <nav
             aria-label="Footer"
             className="flex flex-wrap items-center gap-x-7 gap-y-2"
@@ -18,9 +24,6 @@ export function SiteFooter({ className = "" }: { className?: string }) {
             <a className={footerLinkClassName} href="/privacy">
               Privacy
             </a>
-            <a className={footerLinkClassName} href="/#contact">
-              Contact
-            </a>
             <a
               className={footerLinkClassName}
               href="https://moonlight.ng"
@@ -30,11 +33,7 @@ export function SiteFooter({ className = "" }: { className?: string }) {
               Moonlight
             </a>
           </nav>
-          <FooterThemeSwitch />
         </div>
-        <p className="text-[0.85rem] text-fd-muted-foreground">
-          &copy; 2026 Moonlight Studios.
-        </p>
       </div>
     </footer>
   );

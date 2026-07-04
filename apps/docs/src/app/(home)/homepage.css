@@ -3,10 +3,6 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-.rdio-float-slow {
-  animation: float-slow 4s ease-in-out infinite;
-}
-
 .rdio-homepage .rdio-primary-button {
   color: #fff !important;
   background: linear-gradient(180deg, #2aa1b6 0%, #1e7c8d 100%) !important;
@@ -25,13 +21,18 @@
   color: inherit;
 }
 
-@keyframes float-slow {
+.rdio-terminal-caret {
+  animation: terminal-caret-blink 1s steps(2, start) infinite;
+}
+
+@keyframes terminal-caret-blink {
   0%,
-  100% {
-    transform: translateY(0);
+  45% {
+    opacity: 1;
   }
 
-  50% {
-    transform: translateY(-8px);
+  46%,
+  100% {
+    opacity: 0;
   }
 }

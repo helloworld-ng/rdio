@@ -896,13 +896,18 @@ button {
 }
 
 .schedule-block {
+  --schedule-block-accent: var(--color-accent);
+  --schedule-block-bg: #eef9fc;
+  --schedule-block-bg-hover: #e5f5fa;
+  --schedule-block-border: #c4e6ef;
+  --schedule-block-border-active: #9ed4e3;
   z-index: 1;
   min-width: 0;
   color: var(--color-text);
-  background: #fbfdfd;
-  border: 1px solid var(--color-rule);
+  background: var(--schedule-block-bg);
+  border: 1px solid var(--schedule-block-border);
   border-radius: 6px;
-  box-shadow: 0 0 0 1px #fbfdfd;
+  box-shadow: 0 0 0 1px var(--schedule-block-bg);
 }
 
 .creation-panel {
@@ -912,6 +917,7 @@ button {
 }
 
 .schedule-block {
+  position: relative;
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) max-content;
   gap: 6px;
@@ -921,6 +927,23 @@ button {
     background 140ms ease,
     border-color 140ms ease,
     box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.schedule-block::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  pointer-events: none;
+  content: "";
+  background: var(--schedule-block-accent);
+  opacity: 0;
+  transform: scaleY(0.55);
+  transform-origin: center;
+  transition:
+    opacity 140ms ease,
     transform 140ms ease;
 }
 
@@ -951,13 +974,15 @@ button {
 
 .schedule-block:hover,
 .schedule-block.is-selected {
-  background: #f5fbfc;
-  border-color: #cfe6ed;
-  box-shadow: 0 0 0 1px #f5fbfc;
+  background: var(--schedule-block-bg-hover);
+  border-color: var(--schedule-block-border-active);
+  box-shadow: 0 0 0 1px var(--schedule-block-bg-hover);
 }
 
-.schedule-block.is-selected {
-  box-shadow: inset 3px 0 var(--color-accent);
+.schedule-block:hover::before,
+.schedule-block.is-selected::before {
+  opacity: 1;
+  transform: scaleY(1);
 }
 
 .schedule-block.is-dragging {
@@ -965,20 +990,11 @@ button {
 }
 
 .schedule-block.is-broadcast {
-  background: #fbfdfc;
-  border-color: #d9ebe7;
-  box-shadow: 0 0 0 1px #fbfdfc;
-}
-
-.schedule-block.is-broadcast:hover,
-.schedule-block.is-broadcast.is-selected {
-  background: #f4fbf9;
-  border-color: #b9ded6;
-  box-shadow: 0 0 0 1px #f4fbf9;
-}
-
-.schedule-block.is-broadcast.is-selected {
-  box-shadow: inset 3px 0 var(--color-live);
+  --schedule-block-accent: var(--color-live);
+  --schedule-block-bg: #edf8f5;
+  --schedule-block-bg-hover: #e4f3ef;
+  --schedule-block-border: #c0e3dc;
+  --schedule-block-border-active: #97d1c5;
 }
 
 .block-handle {
@@ -1024,11 +1040,7 @@ button {
 
 .block-copy strong svg {
   flex: 0 0 auto;
-  color: var(--color-accent);
-}
-
-.schedule-block.is-broadcast .block-copy strong svg {
-  color: var(--color-live);
+  color: var(--schedule-block-accent);
 }
 
 .block-copy span {

@@ -1,6 +1,8 @@
-import { type LucideIcon, Monitor, Radio } from "lucide-react";
+import Image from "next/image";
 import type { ReactNode } from "react";
+import heroImage from "@/assets/hero.png";
 import { SiteFooter } from "@/components/site-footer";
+import { TerminalPanel } from "@/components/terminal/terminal-panel";
 
 const githubUrl = "https://github.com/helloworld-ng/rdio";
 const pageContainerClassName =
@@ -64,28 +66,6 @@ function GitHubIcon({ size }: { size: number }) {
   );
 }
 
-function PlaceholderPanel({
-  className,
-  icon: Icon,
-  label,
-}: {
-  className: string;
-  icon: LucideIcon;
-  label: string;
-}) {
-  return (
-    <div
-      className={`flex flex-col items-center justify-center gap-4 rounded-2xl border border-fd-border bg-fd-card text-fd-muted-foreground shadow-[0_30px_70px_rgba(0,0,0,0.14),0_0_100px_rgba(42,161,182,0.03)] transition-all duration-300 dark:shadow-[0_30px_70px_rgba(0,0,0,0.55),0_0_100px_rgba(42,161,182,0.03)] ${className}`}
-    >
-      <Icon
-        aria-hidden="true"
-        className="rdio-float-slow size-[52px] opacity-50"
-      />
-      <p className="font-medium text-[1.1rem]">{label}</p>
-    </div>
-  );
-}
-
 export default function HomePage() {
   return (
     <div className="rdio-homepage relative min-h-screen overflow-x-hidden bg-fd-background text-fd-foreground">
@@ -140,16 +120,25 @@ export default function HomePage() {
                 </p>
               </div>
             </div>
+            <div className="mt-10 flex flex-wrap items-center gap-3">
+              <GitHubLink>Star on GitHub</GitHubLink>
+              <a className={secondaryButtonClassName} href="/docs">
+                Read the docs
+              </a>
+            </div>
           </div>
         </main>
 
         <section className="relative z-10 w-full pt-2.5 pb-20">
           <div className={pageContainerClassName}>
-            <PlaceholderPanel
-              className="h-[360px] md:h-[480px]"
-              icon={Radio}
-              label="Dashboard Area"
-            />
+            <div className="mx-auto max-w-[1420px] overflow-hidden rounded-2xl border border-fd-border bg-fd-card">
+              <Image
+                alt="rdio schedule editor showing station blocks and the slot editing panel"
+                className="block h-auto w-full"
+                priority
+                src={heroImage}
+              />
+            </div>
           </div>
         </section>
       </div>
@@ -165,8 +154,8 @@ export default function HomePage() {
               </h2>
               <p className="max-w-[440px] text-left text-[1.1rem] text-fd-muted-foreground leading-[1.6] lg:text-right">
                 rdio combines the station admin UI, schedule automation, live
-                broadcast handoff, and stream delivery glue into one self-hosted
-                stack.
+                broadcast handoff, and stream delivery glued into one
+                self-hosted stack.
               </p>
             </div>
 
@@ -196,27 +185,21 @@ export default function HomePage() {
         <div className={`${pageContainerClassName} relative z-10`}>
           <div className="grid items-center gap-10 lg:grid-cols-[1fr_1.3fr] lg:gap-[60px]">
             <div className="flex flex-col items-center text-center lg:items-start lg:text-left">
-              <span className="mb-3 font-medium text-[0.8rem] text-fd-muted-foreground uppercase">
-                For Developers
-              </span>
               <h2 className="mb-6 font-medium text-[2rem] leading-[1.1] md:text-[2.5rem] lg:text-[3.5rem]">
-                Schedule, mix, monitor
-                <br className="hidden lg:block" />
-                and configure
+                Bring your
+                <br />
+                own station.
               </h2>
               <p className="mb-8 max-w-[600px] text-[1.1rem] text-fd-muted-foreground leading-[1.6] lg:max-w-[460px]">
-                Enjoy webhooks, customizable players, automated scheduling, and
-                other features all designed to empower developers.
+                rdio runs on boring, proven radio infrastructure: a TypeScript
+                admin app, Fastify API, Postgres, Liquidsoap for playout, and
+                Icecast for the public stream.
               </p>
-              <GitHubLink>Star on GitHub</GitHubLink>
+              <GitHubLink>View on GitHub</GitHubLink>
             </div>
 
             <div>
-              <PlaceholderPanel
-                className="h-[380px] rounded-xl"
-                icon={Monitor}
-                label="Developer Console"
-              />
+              <TerminalPanel />
             </div>
           </div>
         </div>

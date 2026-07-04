@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">rdio</title>
+  <desc id="description">rdio wordmark on a light background</desc>
+  <rect width="1200" height="630" fill="#f7f7f7" />
+  <g fill="#050505" font-family="Inter, Arial, sans-serif" font-size="138" font-weight="800">
+    <text x="120" y="350">rdio</text>
+  </g>
+  <circle cx="425" cy="321" r="17" fill="#2aa1b6" />
+</svg>
