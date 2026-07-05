@@ -34,13 +34,13 @@ rdio has two jobs:
 
 The audio pipeline is intentionally built on common radio tools. rdio does the application work, Liquidsoap does the playout logic, and Icecast serves the stream.
 
-### 1. The admin UI manages station state
+### Admin UI
 
 The web app is where administrators plan the schedule, upload media, manage programs and hosts, create members, and view live broadcast settings.
 
 When a schedule block changes, the admin UI sends that change to the API. The API stores the station data and refreshes the active playout state.
 
-### 2. The API chooses the current source
+### API
 
 The API looks at the station schedule and decides what should be active right now:
 
@@ -50,7 +50,7 @@ The API looks at the station schedule and decides what should be active right no
 
 It writes that decision to a small playout state file that Liquidsoap can read. That file includes a revision, the current mode, and the target source.
 
-### 3. Liquidsoap switches between modes
+### Liquidsoap
 
 Liquidsoap watches the playout state and builds the actual audio source.
 
@@ -60,7 +60,7 @@ Liquidsoap watches the playout state and builds the actual audio source.
 
 For live shows, a host connects with BUTT or another Icecast-compatible source client. They connect to Liquidsoap's broadcast input, not directly to the public listener mount.
 
-### 4. Icecast serves the public stream
+### Icecast
 
 Liquidsoap publishes one stable output to Icecast at the station mount, usually `/live.mp3`.
 

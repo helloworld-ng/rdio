@@ -21,3 +21,32 @@ html > body[data-scroll-locked] {
   --removed-body-scroll-bar-size: 0px !important;
   margin-right: 0px !important;
 }
+
+@media (min-width: 48rem) {
+  #nd-docs-layout {
+    grid-template:
+      "sidebar header"
+      "sidebar toc-popover"
+      "sidebar main" 1fr / var(--fd-sidebar-col) minmax(0, 1fr) !important;
+  }
+}
+
+@media (min-width: 80rem) {
+  #nd-docs-layout {
+    --rdio-docs-rail-gutter: clamp(1rem, 2vw, 2rem);
+
+    grid-template:
+      "sidebar header toc"
+      "sidebar toc-popover toc"
+      "sidebar main toc" 1fr / var(--fd-sidebar-col) minmax(0, 1fr)
+      calc(var(--fd-toc-width) + var(--rdio-docs-rail-gutter)) !important;
+  }
+
+  #nd-toc {
+    justify-self: start;
+  }
+}
+
+.prose :where(p):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+  font-weight: 400;
+}
