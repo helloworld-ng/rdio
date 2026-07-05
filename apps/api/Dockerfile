@@ -4,7 +4,7 @@ RUN corepack enable pnpm
 WORKDIR /app
 
 # Workspace manifests first for layer caching
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json .npmrc ./
 COPY apps/api/package.json      apps/api/
 COPY apps/web/package.json      apps/web/
 COPY apps/worker/package.json   apps/worker/
@@ -36,7 +36,7 @@ USER root
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl gnupg2 \
  && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs icecast2 openssl \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs icecast2 openssl socat netcat-openbsd \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

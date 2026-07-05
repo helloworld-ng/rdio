@@ -28,7 +28,9 @@
     "lint": "ultracite check",
     "format": "ultracite fix",
     "docker:up": "docker compose up",
-    "docker:down": "docker compose down"
+    "docker:down": "docker compose down",
+    "deploy:api": "fly deploy -c apps/api/fly.toml --local-only --depot=false",
+    "deploy:web": "fly deploy -c apps/web/fly.toml --local-only --depot=false"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",
