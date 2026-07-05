@@ -10,7 +10,6 @@ import {
 function proxyLiveStream(_request: FastifyRequest, reply: FastifyReply) {
   reply.hijack();
   reply.raw.setTimeout(0);
-  reply.raw.socket?.setNoDelay(true);
   const proxyReq = httpRequest(
     { hostname: "localhost", port: env.ICECAST_PORT, path: "/live.mp3" },
     (proxyRes) => {
@@ -19,6 +18,7 @@ function proxyLiveStream(_request: FastifyRequest, reply: FastifyReply) {
         "Cache-Control": "no-cache",
         "Access-Control-Allow-Origin": "*",
         "X-Accel-Buffering": "no",
+        Connection: "keep-alive",
       };
       for (const [key, value] of Object.entries(proxyRes.headers)) {
         if (key.startsWith("icy-") && typeof value === "string") {
@@ -29,9 +29,6 @@ function proxyLiveStream(_request: FastifyRequest, reply: FastifyReply) {
       proxyRes.pipe(reply.raw);
     }
   );
-  proxyReq.on("socket", (socket) => {
-    socket.setNoDelay(true);
-  });
   proxyReq.on("error", () => {
     if (!reply.raw.headersSent) {
       reply.raw.writeHead(503);

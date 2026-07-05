@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { logPlayoutEvent, summarizePlayoutTarget } from "./playout-log.js";
@@ -96,8 +96,12 @@ export async function writePlayoutState(
   }
 
   const encoded = encodePlayoutState(next);
-  await writeFile(playoutStateFile, encoded);
-  await writeFile(currentPlayoutFile, `${next.target}\n`);
+  const stateTmp = `${playoutStateFile}.tmp`;
+  const currentTmp = `${currentPlayoutFile}.tmp`;
+  await writeFile(stateTmp, encoded);
+  await writeFile(currentTmp, `${next.target}\n`);
+  await rename(stateTmp, playoutStateFile);
+  await rename(currentTmp, currentPlayoutFile);
   await logPlayoutEvent("playout_write", {
     source: context.source,
     revision: next.revision,

@@ -3,16 +3,29 @@ set("log.file", false)
 settings.init.allow_root.set(true)
 
 fallback_file = "/media/fallback/v1-tone.mp3"
-default = if file.exists(fallback_file) then single(fallback_file) else blank() end
+# Loop the fallback tone — single() plays once then stalls, causing dropouts.
+def fallback_request() =
+  request.create(fallback_file)
+end
+
+default =
+  if file.exists(fallback_file) then
+    request.dynamic(
+      id = "fallback",
+      retry_delay = 0.5,
+      fallback_request
+    )
+  else
+    blank()
+  end
 icecast_host     = environment.get("ICECAST_HOST",            default="localhost")
 icecast_port     = int_of_string(environment.get("ICECAST_PORT",     default="8001"))
 icecast_password = environment.get("ICECAST_SOURCE_PASSWORD", default="sourcepass")
 harbor_port      = int_of_string(environment.get("HARBOR_PORT",      default="8005"))
-harbor_tls_port  = int_of_string(environment.get("HARBOR_TLS_PORT", default="8443"))
-harbor_tls_cert  = environment.get("HARBOR_TLS_CERT", default="/media/harbor-tls/tls.crt")
-harbor_tls_key   = environment.get("HARBOR_TLS_KEY",  default="/media/harbor-tls/tls.key")
 live_status_file = "/media/schedule/broadcast-status.txt"
 playout_state_file = "/media/schedule/playout-state.tsv"
+
+settings.harbor.bind_addrs.set(["0.0.0.0"])
 
 def mark_live_connected(_) =
   process.run("sh -lc 'printf connected > #{live_status_file}'")
@@ -22,10 +35,10 @@ def mark_live_disconnected() =
   process.run("sh -lc 'printf disconnected > #{live_status_file}'")
 end
 
-# Live broadcast source — BUTT connects directly to Liquidsoap.
-live_plain = input.harbor(
-  buffer = 1.0,
-  max = 3.0,
+# Live broadcast source — BUTT connects to plain harbor (8005) or TLS via socat (8443).
+live = input.harbor(
+  buffer = 3.0,
+  max = 12.0,
   on_connect = mark_live_connected,
   on_disconnect = mark_live_disconnected,
   password = icecast_password,
@@ -33,34 +46,6 @@ live_plain = input.harbor(
   user = "source",
   "/broadcast.mp3"
 )
-
-# TLS harbor is only enabled when cert files exist (generated on Fly at boot).
-def mk_live() =
-  if file.exists(harbor_tls_cert) and file.exists(harbor_tls_key) then
-    harbor_tls_transport = http.transport.ssl(
-      certificate = harbor_tls_cert,
-      key = harbor_tls_key
-    )
-
-    live_tls = input.harbor(
-      buffer = 1.0,
-      max = 3.0,
-      on_connect = mark_live_connected,
-      on_disconnect = mark_live_disconnected,
-      password = icecast_password,
-      port = harbor_tls_port,
-      transport = harbor_tls_transport,
-      user = "source",
-      "/broadcast.mp3"
-    )
-
-    fallback(track_sensitive = false, [live_tls, live_plain])
-  else
-    live_plain
-  end
-end
-
-live = mk_live()
 
 def read_playout_state() =
   if file.exists(playout_state_file) then
@@ -129,10 +114,11 @@ recorded = switch(track_sensitive=false, [
   ({true}, default)
 ])
 
-live_or_silence = fallback(track_sensitive = false, [live, blank()])
+# When the live encoder hiccups, hold the fallback tone instead of silence.
+live_or_fallback = fallback(track_sensitive = false, [live, default])
 
 rdio = switch(track_sensitive=false, [
-  ({is_broadcast_mode()}, live_or_silence),
+  ({is_broadcast_mode()}, live_or_fallback),
   ({true}, recorded)
 ])
 rdio = mksafe(rdio)
@@ -146,27 +132,36 @@ def log_playout(message) =
   log(level=3, label="playout", message)
 end
 
-def refresh_playout() =
-  recorded.skip()
-  rdio.skip()
+def refresh_playout(prev_mode) =
+  state = read_playout_state()
+
+  if state.mode == "recording" or prev_mode == "recording" then
+    recorded.skip()
+  end
+
+  # Never skip the live graph during a stable broadcast — that drops Icecast.
+  if not (state.mode == "broadcast" and prev_mode == "broadcast") then
+    rdio.skip()
+  end
 end
 
 def on_playout_change() =
   state = read_playout_state()
-  leaving_recording = last_mode() == "recording" and state.mode != "recording"
-  mode_changed = last_mode() != state.mode
+  prev_mode = last_mode()
+  leaving_recording = prev_mode == "recording" and state.mode != "recording"
+  mode_changed = prev_mode != state.mode
   revision_changed = state.revision != last_revision()
   target_changed = state.target != last_target()
 
   if revision_changed or mode_changed or target_changed then
     log_playout(
-      "rev=#{state.revision} mode=#{state.mode} target=#{state.target} leaving_recording=#{leaving_recording} prev_rev=#{last_revision()} prev_mode=#{last_mode()}"
+      "rev=#{state.revision} mode=#{state.mode} target=#{state.target} leaving_recording=#{leaving_recording} prev_rev=#{last_revision()} prev_mode=#{prev_mode}"
     )
     last_revision := state.revision
     last_mode := state.mode
     last_target := state.target
     # skip() must run on the main clock thread.
-    thread.run(delay=0., refresh_playout)
+    thread.run(delay=0., fun () -> refresh_playout(prev_mode))
   end
 end
 

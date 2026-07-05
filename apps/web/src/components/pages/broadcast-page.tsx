@@ -129,8 +129,11 @@ function BroadcastView({ station }: { station: StationSummary }) {
           {tlsPort ? (
             <>
               <p className="broadcast-settings-note">
-                If connecting from a restricted network, use TLS (SSL on) with
-                port {tlsPort}. Otherwise use the standard settings below.
+                Use this if you are outside the UK or on a network that blocks
+                plain source ports. TLS on port {tlsPort} is required for those
+                connections. The certificate is self-signed; allow or ignore
+                certificate warnings in BUTT. If you are in the UK, the standard
+                settings below usually work.
               </p>
               <div className="settings-list">
                 <SettingsRow label="Application" value="BUTT" />
@@ -148,6 +151,11 @@ function BroadcastView({ station }: { station: StationSummary }) {
                 />
                 <SettingsRow label="Mount" value={mount} />
               </div>
+              <p className="broadcast-settings-note">
+                If BUTT stays on &quot;connecting&quot;, click Trust when asked
+                about the self-signed certificate. Server type must be Icecast
+                (not Shoutcast).
+              </p>
             </>
           ) : null}
           <p className="broadcast-settings-note">

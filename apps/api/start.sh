@@ -3,11 +3,12 @@ set -e
 
 ICECAST_SOURCE_PASSWORD="${ICECAST_SOURCE_PASSWORD:-sourcepass}"
 ICECAST_PORT="${ICECAST_PORT:-8001}"
+HARBOR_PORT="${HARBOR_PORT:-8005}"
 HARBOR_TLS_PORT="${HARBOR_TLS_PORT:-8443}"
 BROADCAST_HOST="${BROADCAST_HOST:-rdio-api.fly.dev}"
 HARBOR_TLS_DIR="/media/harbor-tls"
-ICECAST_QUEUE_SIZE="${ICECAST_QUEUE_SIZE:-131072}"
-ICECAST_BURST_SIZE="${ICECAST_BURST_SIZE:-16384}"
+ICECAST_QUEUE_SIZE="${ICECAST_QUEUE_SIZE:-524288}"
+ICECAST_BURST_SIZE="${ICECAST_BURST_SIZE:-65536}"
 
 mkdir -p "$HARBOR_TLS_DIR"
 if [ ! -f "$HARBOR_TLS_DIR/tls.crt" ]; then
@@ -19,6 +20,8 @@ if [ ! -f "$HARBOR_TLS_DIR/tls.crt" ]; then
 fi
 export HARBOR_TLS_CERT="$HARBOR_TLS_DIR/tls.crt"
 export HARBOR_TLS_KEY="$HARBOR_TLS_DIR/tls.key"
+chmod 644 "$HARBOR_TLS_CERT"
+chmod 600 "$HARBOR_TLS_KEY"
 
 # Write icecast config
 cat > /etc/icecast2/icecast.xml <<EOF
@@ -71,4 +74,19 @@ if [ ! -f /media/schedule/current.txt ]; then
   printf '%s\n' "/media/fallback/v1-tone.mp3" > /media/schedule/current.txt
 fi
 liquidsoap /rdio/station.liq &
+harbor_ready=0
+for _ in $(seq 1 30); do
+  if nc -z 127.0.0.1 "$HARBOR_PORT" 2>/dev/null; then
+    harbor_ready=1
+    break
+  fi
+  sleep 1
+done
+if [ "$harbor_ready" -ne 1 ]; then
+  echo "liquidsoap harbor did not start on port ${HARBOR_PORT}" >&2
+  exit 1
+fi
+# TLS on 8443 for broadcasters outside the UK / restrictive networks.
+# Plain harbor stays on 8005 locally; socat terminates SSL and forwards inward.
+socat "openssl-listen:${HARBOR_TLS_PORT},bind=0.0.0.0,reuseaddr,cert=${HARBOR_TLS_CERT},key=${HARBOR_TLS_KEY},verify=0,fork" "tcp:127.0.0.1:${HARBOR_PORT}" &
 exec node /app/dist/server.js
