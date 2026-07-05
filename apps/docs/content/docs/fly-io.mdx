@@ -1,0 +1,130 @@
+---
+title: Fly.io
+description: Deploy the rdio API and web app to Fly.io.
+---
+
+The repository includes Fly configuration for the API and web apps:
+
+- `apps/api/fly.toml`
+- `apps/web/fly.toml`
+
+The API app is the main radio services app. It bundles the API, Liquidsoap, and Icecast, and mounts persistent media storage at `/media`.
+
+## 1. Install the Fly CLI
+
+Install and sign in with `flyctl`:
+
+```bash
+fly auth login
+```
+
+## 2. Choose app names
+
+Edit the app names in:
+
+```txt
+apps/api/fly.toml
+apps/web/fly.toml
+```
+
+Use globally unique names. The examples use:
+
+```txt
+rdio-api
+rdio-web
+```
+
+If you change the API app name, also update API-related public origins and broadcast host values to match.
+
+## 3. Create Postgres
+
+Create a Fly Postgres database in the same region as the API app, then attach or copy its connection string into the API app as `DATABASE_URL`.
+
+```bash
+fly postgres create
+```
+
+Use the database URL that Fly gives you as the API app's `DATABASE_URL` secret.
+
+## 4. Create API storage
+
+Create the API app and its media volume:
+
+```bash
+fly apps create <api-app-name>
+fly volumes create rdio_media --app <api-app-name> --region <region> --size 10
+```
+
+The API Fly config mounts this volume at `/media`.
+
+## 5. Set API secrets
+
+Set the required API secrets:
+
+```bash
+fly secrets set \
+  DATABASE_URL="<postgres-url>" \
+  BETTER_AUTH_SECRET="<strong-random-secret>" \
+  BETTER_AUTH_URL="https://<api-app-name>.fly.dev" \
+  ICECAST_SOURCE_PASSWORD="<source-password>" \
+  --app <api-app-name>
+```
+
+The API config also sets `BROADCAST_HOST` for source clients. Make sure it points at the API app hostname.
+
+## 6. Deploy the API
+
+Deploy from the repository root so Docker can copy the workspace packages and Liquidsoap script:
+
+```bash
+fly deploy -c apps/api/fly.toml
+```
+
+After deploy, verify the API:
+
+```txt
+https://<api-app-name>.fly.dev/api/health
+```
+
+## 7. Add fallback audio
+
+Liquidsoap needs fallback audio when nothing is scheduled.
+
+Place a file at:
+
+```txt
+/media/fallback/v1-tone.mp3
+```
+
+You can use `fly ssh console --app <api-app-name>` to inspect the mounted volume.
+
+## 8. Deploy the web app
+
+Create and deploy the web app:
+
+```bash
+fly apps create <web-app-name>
+fly deploy -c apps/web/fly.toml
+```
+
+The web app expects API traffic at same-origin `/api`. Its nginx container should proxy that path to the API app.
+
+## 9. Finish setup
+
+Open the web app:
+
+```txt
+https://<web-app-name>.fly.dev
+```
+
+The first browser to complete setup creates the station administrator. After setup, use the Members view to create additional accounts.
+
+## 10. Verify the stream
+
+Check the public stream proxy:
+
+```txt
+https://<api-app-name>.fly.dev/live.mp3
+```
+
+Then confirm the web admin shows the same stream URL in station responses.

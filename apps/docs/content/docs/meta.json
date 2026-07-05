@@ -1,0 +1,10 @@
+{
+  "pages": [
+    "---Get Started---",
+    "introduction",
+    "local-development",
+    "deployment",
+    "---Platform Guides---",
+    "fly-io"
+  ]
+}

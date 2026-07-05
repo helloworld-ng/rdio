@@ -1,0 +1,101 @@
+---
+title: Local Development
+description: Run the rdio app, API, database, and radio services on your machine.
+---
+
+Local development uses two layers:
+
+- the TypeScript apps, run by pnpm
+- local infrastructure, run by Docker Compose
+
+The web admin, API, Postgres, Icecast, and Liquidsoap can all run from the repository root.
+
+## Prerequisites
+
+Install these before starting:
+
+- Node.js 22 or newer
+- pnpm
+- Docker
+
+## Environment files
+
+Copy the example app environment files:
+
+```bash
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
+```
+
+If you need to override Docker Compose defaults, also create the root environment file:
+
+```bash
+cp .env.example .env
+```
+
+## Install dependencies
+
+Install workspace packages from the repository root:
+
+```bash
+pnpm install
+```
+
+## Start infrastructure
+
+Start Postgres, Icecast, and Liquidsoap:
+
+```bash
+docker compose up
+```
+
+Docker Compose exposes the database, live source input, and Icecast listener ports locally. Keep this process running while you work on the app.
+
+## Prepare the database
+
+Apply migrations before opening the app:
+
+```bash
+pnpm db:migrate
+```
+
+## Start the apps
+
+Run the API and web admin in watch mode:
+
+```bash
+pnpm dev
+```
+
+You can also run one app at a time:
+
+```bash
+pnpm api:dev
+pnpm web:dev
+pnpm worker:dev
+```
+
+## Open rdio
+
+Default local endpoints:
+
+| Service | URL |
+| --- | --- |
+| Web admin | `http://localhost:5173` |
+| API | `http://localhost:3001` |
+| Postgres | `postgres://rdio:rdio@localhost:5432/rdio` |
+| Icecast admin | `http://localhost:8002/admin` |
+| Stream proxy | `http://localhost:3001/live.mp3` |
+| Liquidsoap live input | `localhost:8005` |
+
+The first browser to complete setup creates the station administrator. After setup, new accounts are created from the Members view by an authenticated administrator.
+
+## Local stream check
+
+Once the API and radio services are running, open the stream proxy:
+
+```txt
+http://localhost:3001/live.mp3
+```
+
+If nothing is scheduled, Liquidsoap should use the fallback audio from `media/fallback/v1-tone.mp3`.

@@ -1,0 +1,67 @@
+---
+title: Deployment
+description: Understand the pieces rdio needs before choosing a hosting platform.
+---
+
+rdio is easiest to deploy when you treat it as three concerns:
+
+- a web admin app
+- an API that owns station state and proxies the public stream
+- persistent radio data and audio services
+
+The current production model bundles the API, Liquidsoap, and Icecast in one API container. The web app is deployed separately and talks to the API through `/api`.
+
+## What must persist
+
+Production deployments need durable storage for station data and uploaded media. In the bundled container model, mount persistent storage at:
+
+```txt
+/media
+```
+
+rdio stores schedule state, uploaded files, host and program data, current playout pointers, and fallback audio under that path.
+
+## Required services
+
+A production deployment needs:
+
+- Postgres for auth and application data
+- the API container
+- the web container
+- persistent storage mounted into the API container
+- public HTTP access to the web app
+- public HTTP access to the API stream proxy at `/live.mp3`
+- a reachable live broadcast input for source clients such as BUTT
+
+## Required secrets
+
+Set these for the API:
+
+| Secret | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Postgres connection string |
+| `BETTER_AUTH_SECRET` | Signs Better Auth cookies and tokens |
+| `BETTER_AUTH_URL` | Public API origin |
+| `ICECAST_SOURCE_PASSWORD` | Password Liquidsoap uses to publish to Icecast |
+
+For the web app, keep `VITE_API_BASE_URL=/api` when the web server proxies same-origin API traffic.
+
+## Deployment checklist
+
+Before the first public launch:
+
+- create the production database
+- generate a strong `BETTER_AUTH_SECRET`
+- configure the public API and web origins
+- mount persistent storage at `/media`
+- place fallback audio at `/media/fallback/v1-tone.mp3`
+- run database migrations
+- verify `GET /api/health`
+- verify the public stream at `/live.mp3`
+- complete first-admin setup in the web UI
+
+## Platform guides
+
+Start with the Fly.io guide for the current repository configuration:
+
+- [Fly.io](/docs/fly-io)

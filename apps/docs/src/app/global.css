@@ -50,3 +50,7 @@ html > body[data-scroll-locked] {
 .prose :where(p):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
   font-weight: 400;
 }
+
+#nd-page > .prose + div {
+  margin-block: clamp(4rem, 8vh, 7rem) clamp(5rem, 10vh, 8rem);
+}
