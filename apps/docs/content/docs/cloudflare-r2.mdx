@@ -1,0 +1,86 @@
+---
+title: Cloudflare R2
+description: Set up object storage for media uploads.
+---
+
+rdio stores uploaded media in **Cloudflare R2**. R2 credentials are **required** for the API. Uploads fail without them, including in local development.
+
+## Why R2
+
+The media library uploads files directly from the browser to object storage using presigned URLs. This keeps large audio files off the API server and scales independently of your radio container.
+
+Schedule metadata and playout state still live on the API volume (`/media`) and in Postgres. Only uploaded media files use R2.
+
+## 1. Create a bucket
+
+1. Log in to the [Cloudflare dashboard](https://dash.cloudflare.com/).
+2. Go to **R2 Object Storage**.
+3. Create a bucket (e.g. `rdio-media`).
+
+## 2. Create API credentials
+
+1. In R2, open **Manage R2 API Tokens**.
+2. Create a token with **Object Read & Write** permission for your bucket.
+3. Note the **Access Key ID**, **Secret Access Key**, and **Account ID**.
+
+## 3. Enable public access (or custom domain)
+
+Media files are served via `R2_PUBLIC_URL`. Options:
+
+- **R2.dev subdomain**: enable public access on the bucket and use the `https://pub-….r2.dev` URL.
+- **Custom domain**: attach a domain to the bucket for cleaner URLs.
+
+Set `R2_PUBLIC_URL` to the public base URL (no trailing slash).
+
+## 4. Configure the API
+
+Add to `apps/api/.env` (local) or Fly secrets (production):
+
+```bash
+R2_ACCOUNT_ID="<account-id>"
+R2_ACCESS_KEY_ID="<access-key>"
+R2_SECRET_ACCESS_KEY="<secret-key>"
+R2_BUCKET="rdio-media"
+R2_PUBLIC_URL="https://pub-example.r2.dev"
+```
+
+## 5. Verify uploads
+
+1. Start the API with R2 configured.
+2. Open **Media** in the admin UI.
+3. Upload a short audio file.
+4. Confirm it appears in the library and plays back.
+
+## Production (Fly.io)
+
+Set R2 variables as Fly secrets alongside your other API secrets:
+
+```bash
+fly secrets set \
+  R2_ACCOUNT_ID="<account-id>" \
+  R2_ACCESS_KEY_ID="<access-key>" \
+  R2_SECRET_ACCESS_KEY="<secret-key>" \
+  R2_BUCKET="rdio-media" \
+  R2_PUBLIC_URL="https://pub-example.r2.dev" \
+  --app <api-app-name>
+```
+
+See [Fly.io](/docs/fly-io) for the full deploy sequence.
+
+## Upload size limit
+
+Default maximum file size is 500 MB. Override with:
+
+```bash
+MEDIA_UPLOAD_MAX_BYTES=524288000
+```
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Upload fails immediately | R2 credentials and bucket name |
+| Upload completes but file missing | `R2_PUBLIC_URL` and bucket public access |
+| 404 on media playback | Object exists in bucket; public URL matches |
+
+See [Troubleshooting](/docs/troubleshooting) for more.

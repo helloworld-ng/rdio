@@ -17,6 +17,7 @@ Install these before starting:
 - Node.js 22 or newer
 - pnpm
 - Docker
+- Cloudflare R2 credentials (required for media uploads)
 
 ## Environment files
 
@@ -26,6 +27,8 @@ Copy the example app environment files:
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env
 ```
+
+Edit `apps/api/.env` and add your R2 credentials. See [Cloudflare R2](/docs/cloudflare-r2).
 
 If you need to override Docker Compose defaults, also create the root environment file:
 
@@ -72,8 +75,19 @@ You can also run one app at a time:
 ```bash
 pnpm api:dev
 pnpm web:dev
-pnpm worker:dev
 ```
+
+The `worker` package exists but is currently a stub. You do not need it for normal development.
+
+### Documentation site
+
+Run the docs app separately:
+
+```bash
+pnpm docs:dev
+```
+
+Open `http://localhost:3000` for the documentation site.
 
 ## Open rdio
 
@@ -83,12 +97,15 @@ Default local endpoints:
 | --- | --- |
 | Web admin | `http://localhost:5173` |
 | API | `http://localhost:3001` |
+| Docs | `http://localhost:3000` |
 | Postgres | `postgres://rdio:rdio@localhost:5432/rdio` |
 | Icecast admin | `http://localhost:8002/admin` |
 | Stream proxy | `http://localhost:3001/live.mp3` |
 | Liquidsoap live input | `localhost:8005` |
 
-The first browser to complete setup creates the station administrator. After setup, new accounts are created from the Members view by an authenticated administrator.
+Docker Compose maps Icecast container port 8000 to host port **8002**. The API connects to Icecast on port 8000 inside the Docker network via `ICECAST_PORT=8000` in `apps/api/.env`.
+
+The first browser to complete setup creates the station administrator. See [First-time setup](/docs/first-setup).
 
 ## Local stream check
 
@@ -99,3 +116,7 @@ http://localhost:3001/live.mp3
 ```
 
 If nothing is scheduled, Liquidsoap should use the fallback audio from `media/fallback/v1-tone.mp3`.
+
+## Local BUTT test
+
+To test live broadcast locally, connect BUTT to `localhost:8005` with user `source`, password from `ICECAST_SOURCE_PASSWORD`, and mount `broadcast.mp3`. Schedule a live broadcast slot first. See [Live broadcast](/docs/live-broadcast).

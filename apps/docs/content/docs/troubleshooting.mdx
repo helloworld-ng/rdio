@@ -1,0 +1,119 @@
+---
+title: Troubleshooting
+description: Common problems with streams, broadcasts, schedules, and deploys.
+---
+
+## Stream does not play
+
+### Symptom
+
+`/live.mp3` returns 404, silence, or "Connecting…" in the admin player.
+
+### Checks
+
+1. **Icecast has a source**: Liquidsoap must be running and connected to Icecast. On Fly, confirm the API machine is healthy.
+2. **Fallback audio exists**: place `v1-tone.mp3` at `/media/fallback/v1-tone.mp3` on the API volume.
+3. **Liquidsoap started**: if harbor ports accept TCP but return no HTTP response, Liquidsoap may have failed to start. Check container logs.
+4. **API stream proxy**: test `curl -I https://<api-host>/live.mp3` directly.
+
+## BUTT stuck on "connecting"
+
+### Symptom
+
+BUTT never connects; Broadcast view shows "Waiting for source".
+
+### Checks
+
+1. **BUTT version**: use 0.1.17 or newer.
+2. **Server type**: must be **Icecast**, not Shoutcast.
+3. **Active live slot**: a **live broadcast** schedule block must be current.
+4. **Credentials**: user `source`, password from Broadcast view, mount `broadcast.mp3`.
+5. **TLS**: on port 8443, accept the self-signed certificate in BUTT.
+6. **Network**: try TLS (8443) if plain harbor (8005) is blocked.
+7. **Harbor responding**: port should return HTTP (401 without auth is normal).
+
+See [Live broadcast](/docs/live-broadcast).
+
+## Schedule not switching
+
+### Symptom
+
+Wrong audio plays, or fallback plays during a scheduled slot.
+
+### Checks
+
+1. **Timezone**: slot times use the station timezone from Settings.
+2. **Slot kind**: recording slots need media attached; live slots need BUTT connected.
+3. **Overlaps**: conflicting slots may prevent saves; reload the schedule.
+4. **Past edits**: confirm the slot was saved (watch for save errors in the calendar).
+
+## Media upload fails
+
+### Symptom
+
+Upload errors in the Media view.
+
+### Checks
+
+1. **R2 configured**: all `R2_*` variables set. See [Cloudflare R2](/docs/cloudflare-r2).
+2. **File size**: under `MEDIA_UPLOAD_MAX_BYTES` (default 500 MB).
+3. **Bucket permissions**: API token has read/write on the bucket.
+
+## Auth / sign-in issues
+
+### Symptom
+
+Login fails, CORS errors, or session drops.
+
+### Checks
+
+1. **WEB_ORIGIN**: includes the exact web admin URL (scheme + host + port).
+2. **BETTER_AUTH_URL**: matches the public API origin.
+3. **BETTER_AUTH_SECRET**: set and at least 32 characters; do not change casually in production.
+
+## Fly deploy failures
+
+### Symptom
+
+`fly deploy` fails on build or machine update.
+
+### Checks
+
+1. **Logged in**: `fly auth login`.
+2. **Depot errors**: use `pnpm deploy:api` or `fly deploy --local-only --depot=false`.
+3. **npmrc**: API Dockerfile requires `.npmrc` in the build context.
+4. **Migrations**: run `pnpm db:migrate` against production Postgres after first deploy.
+
+## Database migrations
+
+After first production deploy:
+
+```bash
+# With DATABASE_URL pointing at production
+pnpm db:migrate
+```
+
+Or SSH into the API machine and run migrations from a release shell if your workflow requires it.
+
+## Getting logs
+
+### Fly.io
+
+```bash
+fly logs --app <api-app-name>
+```
+
+Look for Liquidsoap startup errors, Icecast connection failures, and playout state changes.
+
+### Local
+
+```bash
+docker compose logs liquidsoap
+docker compose logs icecast
+```
+
+## Still stuck?
+
+1. Verify [Environment variables](/docs/environment-variables).
+2. Walk through [Fly.io](/docs/fly-io) deploy steps in order.
+3. Test harbor with a plain TCP connection to port 8005 after deploy.

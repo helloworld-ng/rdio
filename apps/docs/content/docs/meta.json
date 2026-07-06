@@ -2,9 +2,21 @@
   "pages": [
     "---Get Started---",
     "introduction",
+    "features",
     "local-development",
+    "---Using rdio---",
+    "first-setup",
+    "schedule",
+    "live-broadcast",
+    "media",
+    "programs-and-hosts",
+    "members-and-roles",
+    "monitoring-the-stream",
+    "---Deploy---",
     "deployment",
-    "---Platform Guides---",
-    "fly-io"
+    "environment-variables",
+    "cloudflare-r2",
+    "fly-io",
+    "troubleshooting"
   ]
 }

@@ -1,0 +1,81 @@
+---
+title: Environment variables
+description: Reference for API and web configuration.
+---
+
+This page lists the environment variables rdio uses. Copy `apps/api/.env.example` and `apps/web/.env.example` as starting points.
+
+## API variables
+
+| Variable | Required | Default | Purpose |
+| --- | --- | --- | --- |
+| `DATABASE_URL` | Yes |: | Postgres connection string |
+| `BETTER_AUTH_SECRET` | Yes |: | Signs auth cookies and tokens (min 32 chars) |
+| `BETTER_AUTH_URL` | Yes | `http://localhost:3001` | Public API origin for auth |
+| `WEB_ORIGIN` | Yes | `http://localhost:5173` | Allowed browser origins (comma-separated) |
+| `API_PORT` | No | `3001` | API listen port |
+| `ICECAST_HOST` | No | `localhost` | Icecast hostname inside the container |
+| `ICECAST_PORT` | No | `8000` | Icecast port inside the container |
+| `ICECAST_SOURCE_PASSWORD` | No | `sourcepass` | Password for Liquidsoap → Icecast and harbor |
+| `HARBOR_PORT` | No | `8005` | Plain harbor port for BUTT |
+| `HARBOR_TLS_PORT` | No | `8443` | TLS harbor port for BUTT |
+| `PUBLIC_STREAM_BASE_URL` | No | `http://localhost:8000` | Used to build stream URLs in API responses |
+| `BROADCAST_HOST` | No |: | Public hostname for BUTT (defaults to stream URL host) |
+| `R2_ACCOUNT_ID` | Yes |: | Cloudflare account ID |
+| `R2_ACCESS_KEY_ID` | Yes |: | R2 API token access key |
+| `R2_SECRET_ACCESS_KEY` | Yes |: | R2 API token secret |
+| `R2_BUCKET` | Yes |: | R2 bucket name |
+| `R2_PUBLIC_URL` | Yes |: | Public base URL for media objects |
+| `MEDIA_UPLOAD_MAX_BYTES` | No | `524288000` | Max upload size (500 MB) |
+| `NODE_ENV` | No | `development` | `development`, `production`, or `test` |
+
+### WEB_ORIGIN
+
+List every origin that calls the API in the browser. For split deployments:
+
+```txt
+WEB_ORIGIN=https://rdio-web.fly.dev,https://radio.example.com
+```
+
+Missing origins cause auth and CORS failures.
+
+### BROADCAST_HOST
+
+Set this to the hostname presenters use in BUTT. On Fly, this is typically your API app hostname:
+
+```txt
+BROADCAST_HOST=rdio-api.fly.dev
+```
+
+## Web variables
+
+| Variable | Required | Default | Purpose |
+| --- | --- | --- | --- |
+| `VITE_API_BASE_URL` | No | `/api` | API path prefix baked into the JS bundle |
+
+Keep `VITE_API_BASE_URL=/api` when nginx proxies API traffic on the same origin.
+
+## Docker Compose (root `.env`)
+
+Optional overrides for local infrastructure:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `POSTGRES_DB` | `rdio` | Database name |
+| `POSTGRES_USER` | `rdio` | Database user |
+| `POSTGRES_PASSWORD` | `rdio` | Database password |
+| `ICECAST_SOURCE_PASSWORD` | `sourcepass` | Icecast and harbor password |
+| `ICECAST_HOSTNAME` | `localhost` | Icecast hostname in compose |
+
+## Port reference
+
+| Service | Local dev | Production (Fly API app) |
+| --- | --- | --- |
+| Web admin | `5173` | `443` (web app) |
+| API | `3001` | `443` `/api` |
+| Icecast listeners | `8002` (host) → `8000` (container) | `8001` |
+| Harbor (BUTT plain) | `8005` | `8005` |
+| Harbor TLS (BUTT SSL) |: | `8443` |
+| Postgres | `5432` | Fly Postgres |
+
+See [Cloudflare R2](/docs/cloudflare-r2) for media storage setup.

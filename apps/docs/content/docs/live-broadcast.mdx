@@ -1,0 +1,81 @@
+---
+title: Live broadcast
+description: Connect BUTT or another Icecast-compatible encoder for live shows.
+---
+
+Live shows use a **live broadcast** schedule slot and a source client such as [BUTT](https://danielnoethen.de/) (Broadcast Using This Tool).
+
+Presenters connect to Liquidsoap's **harbor input**, not directly to the public listener mount. Listeners keep using the same `/live.mp3` URL.
+
+## Before you go live
+
+1. **Schedule a live broadcast slot** for the show window. See [Schedule](/docs/schedule).
+2. Wait until the slot is active (or start it manually by ensuring the current time falls within the slot).
+3. Open the **Broadcast** view in the admin UI for connection settings.
+
+The Broadcast view shows whether a source is connected and lists the settings to enter in BUTT.
+
+## BUTT version
+
+Use **BUTT 0.1.17 or newer**. Older versions (0.1.14–0.1.16) can hang on "connecting" when talking to Liquidsoap harbor.
+
+## BUTT settings
+
+Open BUTT → **Settings** → **Main** → **Server** → **Add**.
+
+Use the values shown in the admin **Broadcast** view. In general:
+
+| Setting | Value |
+| --- | --- |
+| **Type** | Icecast (not Shoutcast) |
+| **Address** | Your API hostname (e.g. `rdio-api.fly.dev`) |
+| **User** | `source` |
+| **Password** | Source password from Broadcast view |
+| **Mount** | `broadcast.mp3` (no leading slash in BUTT) |
+
+### Standard connection (no SSL)
+
+Use when you are on a network that allows outbound connections to the harbor port (default **8005**):
+
+- **Port:** `8005`
+- **SSL / TLS:** Off
+
+### TLS connection (outside restrictive networks)
+
+Use when plain harbor ports are blocked (common outside the UK or on corporate networks):
+
+- **Port:** `8443`
+- **SSL / TLS:** On
+- **Certificate:** Trust or allow the self-signed certificate when BUTT prompts you
+
+The TLS port terminates SSL at the API container and forwards to the plain harbor internally.
+
+## Connecting
+
+1. Enter the settings above in BUTT.
+2. Click the play/connect button in BUTT.
+3. In the admin **Broadcast** view, the status should change to **Source connected**.
+
+If BUTT stays on "connecting":
+
+- Confirm server type is **Icecast**, not Shoutcast.
+- Confirm a **live broadcast** slot is currently active on the schedule.
+- For TLS, accept the self-signed certificate.
+- Update BUTT to 0.1.17+.
+- See [Troubleshooting](/docs/troubleshooting).
+
+## During the show
+
+- Listeners hear your live audio on the public stream URL.
+- If the encoder disconnects briefly, Liquidsoap falls back to the station tone until the source reconnects or the slot ends.
+- The admin player bar shows the live broadcast slot title when one is active.
+
+## After the show
+
+1. Stop streaming in BUTT.
+2. The Broadcast view returns to **Waiting for source**.
+3. When the schedule slot ends, playout switches to the next slot or fallback audio.
+
+## Other encoders
+
+Any Icecast-compatible source client that supports the `SOURCE` method can connect to the harbor with the same host, port, user, password, and mount. BUTT is the tested and documented option.

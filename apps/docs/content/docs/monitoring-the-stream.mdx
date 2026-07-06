@@ -1,0 +1,70 @@
+---
+title: Monitoring the stream
+description: Listen to your station and confirm playout is working.
+---
+
+rdio exposes one public stream URL for listeners. The admin UI includes tools to monitor what is on air.
+
+## Stream URL
+
+Find your stream URL in **Settings**:
+
+- **Stream URL**: the public address listeners use (e.g. `https://your-api.example.com/live.mp3`)
+- **Mount**: usually `/live.mp3`
+
+In production, the web app may also proxy `/live.mp3` through nginx so listeners can use the web hostname.
+
+## Built-in player
+
+The player bar at the bottom of the admin UI streams `/live.mp3` directly.
+
+- Click **Play** to listen.
+- The bar shows the station name and, when available, the current schedule block title.
+- A live icon indicates a **live broadcast** slot; a list icon indicates a **recording** slot.
+
+You can collapse or expand the player. Visibility preference is saved in your browser.
+
+## What you should hear
+
+| Situation | Expected audio |
+| --- | --- |
+| Nothing scheduled | Fallback tone or configured fallback file |
+| Recording slot active | Attached media file |
+| Live broadcast slot, source connected | Presenter's live audio |
+| Live broadcast slot, no source yet | Fallback tone until BUTT connects |
+
+## Checking live source status
+
+Open **Broadcast** to see whether BUTT (or another encoder) is connected:
+
+- **Source connected**: harbor has an active live input.
+- **Waiting for source**: the slot may be active but no encoder is connected.
+
+This status polls every few seconds.
+
+## Verifying from outside the admin
+
+Test the stream without signing in:
+
+```bash
+curl -I https://<your-api-host>/live.mp3
+```
+
+A healthy stream returns `200` with `Content-Type: audio/mpeg` (or similar).
+
+Open the URL in a desktop player (VLC, etc.) or embed it in a listener website.
+
+## Public schedule data
+
+Listener apps can read schedule information without authentication:
+
+- `GET /api/station`: station metadata and current program
+- `GET /api/schedule-blocks/:day`: blocks for a given date (`YYYY-MM-DD`)
+
+These endpoints power companion listener sites. The admin schedule is the source of truth.
+
+## Tips
+
+- Monitor the stream before every live show to confirm fallback and switching work.
+- If the player shows "Connecting…" for a long time, check [Troubleshooting](/docs/troubleshooting).
+- Recording slots need media attached before they start. Verify attachments in the schedule editor.

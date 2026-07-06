@@ -13,38 +13,53 @@ The current production model bundles the API, Liquidsoap, and Icecast in one API
 
 ## What must persist
 
-Production deployments need durable storage for station data and uploaded media. In the bundled container model, mount persistent storage at:
+Production deployments need durable storage for station data and uploaded media.
 
-```txt
-/media
-```
+### API volume (`/media`)
 
-rdio stores schedule state, uploaded files, host and program data, current playout pointers, and fallback audio under that path.
+Mount persistent storage at `/media` on the API container. rdio stores schedule state, playout pointers, fallback audio, and related radio files under this path.
+
+### Object storage (R2)
+
+Uploaded media files live in **Cloudflare R2**, not on the API volume. Configure R2 before expecting media uploads to work. See [Cloudflare R2](/docs/cloudflare-r2).
+
+### Postgres
+
+Auth, members, and application data live in Postgres.
 
 ## Required services
 
 A production deployment needs:
 
 - Postgres for auth and application data
-- the API container
+- the API container (API + Liquidsoap + Icecast)
 - the web container
-- persistent storage mounted into the API container
+- persistent storage mounted into the API container at `/media`
+- Cloudflare R2 for media uploads
 - public HTTP access to the web app
 - public HTTP access to the API stream proxy at `/live.mp3`
-- a reachable live broadcast input for source clients such as BUTT
+- reachable harbor ports for live source clients (8005 plain, 8443 TLS)
 
 ## Required secrets
 
-Set these for the API:
+Set these for the API. See [Environment variables](/docs/environment-variables) for the full reference.
 
 | Secret | Purpose |
 | --- | --- |
 | `DATABASE_URL` | Postgres connection string |
 | `BETTER_AUTH_SECRET` | Signs Better Auth cookies and tokens |
 | `BETTER_AUTH_URL` | Public API origin |
-| `ICECAST_SOURCE_PASSWORD` | Password Liquidsoap uses to publish to Icecast |
+| `WEB_ORIGIN` | Allowed web admin origins (comma-separated) |
+| `ICECAST_SOURCE_PASSWORD` | Password Liquidsoap uses to publish to Icecast and harbor |
+| `R2_ACCOUNT_ID` | Cloudflare account ID |
+| `R2_ACCESS_KEY_ID` | R2 API token access key |
+| `R2_SECRET_ACCESS_KEY` | R2 API token secret |
+| `R2_BUCKET` | R2 bucket name |
+| `R2_PUBLIC_URL` | Public base URL for media objects |
 
 For the web app, keep `VITE_API_BASE_URL=/api` when the web server proxies same-origin API traffic.
+
+Update `apps/web/nginx.conf` to point at your API hostname if it differs from the default.
 
 ## Deployment checklist
 
@@ -52,12 +67,14 @@ Before the first public launch:
 
 - create the production database
 - generate a strong `BETTER_AUTH_SECRET`
-- configure the public API and web origins
+- configure `WEB_ORIGIN` with your web admin URL
+- set up Cloudflare R2 and add `R2_*` secrets
 - mount persistent storage at `/media`
 - place fallback audio at `/media/fallback/v1-tone.mp3`
 - run database migrations
 - verify `GET /api/health`
 - verify the public stream at `/live.mp3`
+- verify harbor responds on port 8005
 - complete first-admin setup in the web UI
 
 ## Platform guides
@@ -65,3 +82,5 @@ Before the first public launch:
 Start with the Fly.io guide for the current repository configuration:
 
 - [Fly.io](/docs/fly-io)
+
+If something fails after deploy, see [Troubleshooting](/docs/troubleshooting).

@@ -1,0 +1,81 @@
+---
+title: Schedule
+description: Plan recording and live broadcast slots on the daily calendar.
+---
+
+The **Schedule** view is the heart of rdio. It shows a 24-hour calendar for one day at a time and lets you plan what goes on air.
+
+## Slot types
+
+Every schedule block is one of two kinds:
+
+### Recording
+
+A **recording** slot plays uploaded audio from your media library. Use this for pre-recorded shows, playlists, or segments.
+
+When a recording slot is active, Liquidsoap enters **recording mode** and plays the attached media file.
+
+### Live broadcast
+
+A **live broadcast** slot expects a presenter to connect with BUTT or another Icecast-compatible source client. Use this for live shows.
+
+When a live broadcast slot is active, Liquidsoap enters **broadcast mode** and listens for a live source on the harbor input. See [Live broadcast](/docs/live-broadcast) for connection details.
+
+## Creating a slot
+
+1. Open **Schedule**.
+2. Click an empty area on the calendar or use the hour grid to start a new slot.
+3. Choose **Recording** or **Live Broadcast**.
+4. Set the start time and duration.
+5. Add a title and optional description.
+6. For recordings, attach media from your library (or upload inline).
+7. Optionally link a program and assign hosts.
+8. Save the slot.
+
+Changes are saved automatically. A brief "saving" indicator appears while the schedule syncs to the server.
+
+## Editing and moving slots
+
+- **Click a slot** to open the editor and change its details.
+- **Drag a slot** to move it to a different time.
+- **Resize a slot** by dragging its edges to change duration.
+- **Delete a slot** from the editor panel.
+
+Past and currently-airing slots may be restricted from certain edits to avoid disrupting active playout.
+
+## Programs and hosts on slots
+
+You can attach:
+
+- A **program**: fills in title and description from your programs library.
+- **Hosts**: one or more presenters shown on the calendar and in the player bar.
+
+Programs and hosts are optional. You can also type a custom title directly on the slot.
+
+## Overlapping slots
+
+rdio does not allow two slots to overlap on the same day. If you try to save an overlapping schedule, you see a conflict error. Adjust times or delete the conflicting slot and try again.
+
+If another editor changed the schedule while you were working, you may need to reload before saving.
+
+## How playout switches
+
+When the clock reaches a slot's start time, the API updates the playout state file that Liquidsoap watches:
+
+| Active slot | Playout mode | Audio source |
+| --- | --- | --- |
+| Recording | `recording` | Attached media file |
+| Live broadcast | `broadcast` | Harbor input (BUTT) |
+| Nothing scheduled | `fallback` | Fallback tone or file |
+
+Listeners always hear the same public stream URL. rdio switches what feeds that stream behind the scenes.
+
+## Timezone
+
+The schedule calendar uses the station timezone from **Settings**. All slot times are interpreted in that timezone.
+
+## Tips
+
+- Schedule live broadcast slots a few minutes before the presenter needs to connect, so they have time to open BUTT.
+- Attach media before the recording slot starts. Liquidsoap needs the file path when playout switches.
+- Use the built-in player to confirm the correct slot is on air. See [Monitoring the stream](/docs/monitoring-the-stream).
