@@ -17,15 +17,27 @@ const secondaryButtonClassName =
 const features = [
   {
     title: "Schedule your station",
-    text: "Plan programs and recordings by day, then let rdio refresh the active playout file when the schedule changes.",
+    text: "Plan recording and live broadcast slots on a daily calendar with drag-and-drop, conflict detection, and automatic playout switching.",
   },
   {
     title: "Go live when needed",
-    text: "Create live broadcast blocks and hand off to a BUTT/Icecast-compatible source without changing the public listener stream.",
+    text: "Hand off to BUTT or another Icecast-compatible encoder. Presenters connect to harbor; listeners keep the same stream URL.",
+  },
+  {
+    title: "Manage your library",
+    text: "Upload media to R2, organize programs and hosts, and attach them to schedule slots from one control room.",
+  },
+  {
+    title: "Monitor on air",
+    text: "Listen through the built-in player, check live source status, and confirm playout before every show.",
+  },
+  {
+    title: "Team access",
+    text: "Create member accounts with admin and user roles. New members set their own password on first sign-in.",
   },
   {
     title: "Own the stack",
-    text: "Run the admin app, API, Postgres, Liquidsoap, and Icecast yourself. rdio gives you the control plane, not a hosted platform.",
+    text: "Run the admin app, API, Postgres, Liquidsoap, and Icecast yourself. rdio is the control plane, not a hosted platform.",
   },
 ] as const;
 

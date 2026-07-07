@@ -1,0 +1,60 @@
+---
+title: First-time setup
+description: Create your station administrator and get the control room ready for your team.
+---
+
+After rdio is running, the first person to open the web admin completes station setup.
+
+## Create the administrator
+
+1. Open the web admin in your browser.
+2. If no administrator exists yet, you are redirected to the **Set up your station** page.
+3. Enter your name, email, and password.
+4. Submit the form.
+
+The first account created becomes the station **administrator**. This account can manage members and has full access to the control room.
+
+## Sign in
+
+Once setup is complete, sign in at `/login` with the administrator email and password.
+
+## Add team members
+
+Administrators can create accounts for other station staff:
+
+1. Open **Members** in the sidebar.
+2. Click **New member**.
+3. Enter the member's name, email, and a temporary password.
+4. Save.
+
+New members are created with the `user` role. They must **change their password** on first sign-in before they can use the rest of the app.
+
+## What members can do
+
+| Role | Access |
+| --- | --- |
+| **admin** | Full control room access, including Members management |
+| **user** | Schedule, broadcast, programs, hosts, media, profile, and settings |
+
+Non-admin members who open **Members** see their own **Settings** page instead.
+
+## Recommended first steps
+
+After setup, work through these in order:
+
+1. **Upload media**: add recordings you plan to schedule. See [Media library](/docs/media).
+2. **Create hosts and programs**: optional but useful for labeling shows. See [Programs and hosts](/docs/programs-and-hosts).
+3. **Build the schedule**: add recording and live broadcast slots. See [Schedule](/docs/schedule).
+4. **Verify the stream**: confirm `/live.mp3` plays fallback audio. See [Monitoring the stream](/docs/monitoring-the-stream).
+5. **Test a live broadcast**: schedule a live slot and connect BUTT. See [Live broadcast](/docs/live-broadcast).
+
+## Station settings
+
+Open **Settings** (or **Members** → settings for non-admins) to view:
+
+- Station name, slug, and timezone
+- Public stream URL and mount point
+- Fallback source configuration
+- Links to the API and Icecast admin
+
+Most station defaults are set at deploy time. The timezone affects how the schedule calendar interprets slot times.

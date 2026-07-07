@@ -1,0 +1,57 @@
+---
+title: Features
+description: A complete overview of what rdio offers station operators and deployers.
+---
+
+rdio is a self-hosted control room for a single internet radio station. This page lists the features available today.
+
+## Scheduling and playout
+
+- **Daily calendar**: plan shows day by day with a visual timeline.
+- **Recording slots**: schedule pre-recorded audio from your media library.
+- **Live broadcast slots**: schedule windows where a presenter connects with BUTT or another Icecast-compatible encoder.
+- **Drag and drop**: move and resize slots on the calendar.
+- **Conflict detection**: overlapping slots are rejected before they are saved.
+- **Autosave**: schedule changes sync to the server as you edit.
+- **Automatic playout**: the API updates Liquidsoap when the active slot changes.
+- **Fallback audio**: a tone or file plays when nothing is scheduled, so the stream never goes silent.
+
+## Content management
+
+- **Media library**: upload and manage audio files used in recording slots.
+- **Programs**: reusable show entries with title, description, and host.
+- **Hosts**: named presenters with calendar color coding.
+- **Schedule attachments**: link media, programs, and hosts to individual slots.
+
+## Live operations
+
+- **Broadcast view**: connection settings and live source status for presenters.
+- **Harbor input**: Liquidsoap accepts live sources on a dedicated port.
+- **TLS harbor**: optional SSL port for broadcasters on restrictive networks.
+- **Single public mount**: listeners always use `/live.mp3` regardless of what is on air.
+
+## Admin and access
+
+- **First-admin setup**: the first browser to complete setup creates the station administrator.
+- **Member accounts**: administrators create accounts for the station team.
+- **Roles**: `admin` and `user` roles control who can manage members.
+- **Forced password change**: new members must set their own password on first sign-in.
+
+## Listening and monitoring
+
+- **Stream proxy**: the API proxies Icecast at `/live.mp3` for listeners and the admin player.
+- **Built-in player**: monitor the live stream from the admin UI.
+- **Now playing**: the player bar shows the current schedule block when one is active.
+
+## Integrations
+
+- **Public schedule API**: listener apps can read station and schedule data without signing in.
+- **Icecast and Liquidsoap**: rdio orchestrates proven radio infrastructure rather than replacing it.
+
+## What rdio does not include
+
+rdio is not a hosted platform, listener directory, or rights-management system. You run the infrastructure, own your media, and are responsible for compliance in your jurisdiction.
+
+---
+
+For operator workflows, start with [First-time setup](/docs/first-setup). For deployment, see [Deployment](/docs/deployment).

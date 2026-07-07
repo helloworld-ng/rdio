@@ -1,0 +1,55 @@
+---
+title: Media library
+description: Upload and manage audio files for recording slots.
+---
+
+The **Media** view is your station's audio library. Files uploaded here can be attached to **recording** schedule slots.
+
+## Uploading files
+
+1. Open **Media**.
+2. Click **Upload** (or the upload button in the header).
+3. Select an audio file from your computer.
+4. Wait for the upload to complete.
+
+Uploads go directly to your configured object storage (Cloudflare R2 in production). The API issues a presigned URL; the browser uploads the file, then confirms completion.
+
+### Upload limits
+
+The default maximum upload size is **500 MB** per file. Deployers can change this with the `MEDIA_UPLOAD_MAX_BYTES` environment variable.
+
+## Supported use
+
+Media files are used as **recording** slot audio. Attach a file when creating or editing a recording slot on the schedule.
+
+Image uploads may appear in the library filter, but recording slots use audio files.
+
+## Viewing and filtering
+
+The media library lists all uploaded files with name, size, and upload time. Filter by:
+
+- **All**
+- **Audio**
+- **Image**
+
+Click a file to preview playback when supported.
+
+## Deleting media
+
+1. Select a file in the library.
+2. Click **Delete**.
+3. Confirm the deletion.
+
+If a file is used by one or more schedule slots, deleting it **clears the media attachment** from those slots. The slots remain on the calendar but will not have audio until you attach a different file.
+
+## Local development
+
+Media uploads require R2 credentials even when running locally. See [Cloudflare R2](/docs/cloudflare-r2) for setup.
+
+Without valid R2 configuration, uploads fail even if the rest of the app works.
+
+## Tips
+
+- Upload and test-play files before scheduling them, especially long recordings.
+- Use descriptive file names so they are easy to find in the media picker when building slots.
+- Keep a backup of your media outside rdio; object storage is the canonical store in production.

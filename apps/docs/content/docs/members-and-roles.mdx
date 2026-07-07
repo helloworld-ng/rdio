@@ -1,0 +1,59 @@
+---
+title: Members and roles
+description: Create station accounts and manage administrator access.
+---
+
+rdio uses account-based sign-in. Station administrators manage who can access the control room.
+
+## Roles
+
+| Role | Capabilities |
+| --- | --- |
+| **admin** | Full access, including creating and deleting members |
+| **user** | Schedule, broadcast, programs, hosts, media, profile, and settings |
+
+The first account created during [first-time setup](/docs/first-setup) is always an administrator.
+
+## Creating members
+
+Administrators only:
+
+1. Open **Members** in the sidebar.
+2. Click **New member**.
+3. Enter name, email, and a temporary password.
+4. Save.
+
+New members are created with the `user` role and `mustChangePassword` set. They must choose a new password on first sign-in.
+
+## First sign-in for new members
+
+1. Open the web admin and go to **Sign in**.
+2. Enter the email and temporary password provided by the administrator.
+3. You are prompted to **Choose a new password**.
+4. After changing the password, you reach the schedule view.
+
+Until the password is changed, the member cannot use other parts of the app.
+
+## Changing roles
+
+Administrators can promote a member to admin:
+
+1. Open **Members**.
+2. Click the settings icon next to a member.
+3. Change the role and save.
+
+You cannot demote or delete your own account from the Members view.
+
+## Deleting members
+
+Administrators can delete other members (except themselves). Deleted members lose access immediately.
+
+## Non-admin access to Members
+
+Users without the admin role who click **Members** see the **Settings** page instead. They can view station settings but cannot manage accounts.
+
+## Security notes
+
+- Use strong passwords for administrator accounts.
+- Rotate `BETTER_AUTH_SECRET` only with care; it invalidates existing sessions.
+- List every web origin that calls the API in `WEB_ORIGIN`. See [Environment variables](/docs/environment-variables).

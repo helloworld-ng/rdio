@@ -34,7 +34,11 @@ rdio-api
 rdio-web
 ```
 
-If you change the API app name, also update API-related public origins and broadcast host values to match.
+If you change the API app name, also update:
+
+- `BROADCAST_HOST` in `apps/api/fly.toml`
+- `apps/web/nginx.conf` proxy targets
+- `BETTER_AUTH_URL` and `WEB_ORIGIN` secrets
 
 ## 3. Create Postgres
 
@@ -46,7 +50,11 @@ fly postgres create
 
 Use the database URL that Fly gives you as the API app's `DATABASE_URL` secret.
 
-## 4. Create API storage
+## 4. Set up Cloudflare R2
+
+Create an R2 bucket and API token before deploying. See [Cloudflare R2](/docs/cloudflare-r2).
+
+## 5. Create API storage
 
 Create the API app and its media volume:
 
@@ -57,7 +65,7 @@ fly volumes create rdio_media --app <api-app-name> --region <region> --size 10
 
 The API Fly config mounts this volume at `/media`.
 
-## 5. Set API secrets
+## 6. Set API secrets
 
 Set the required API secrets:
 
@@ -66,27 +74,43 @@ fly secrets set \
   DATABASE_URL="<postgres-url>" \
   BETTER_AUTH_SECRET="<strong-random-secret>" \
   BETTER_AUTH_URL="https://<api-app-name>.fly.dev" \
+  WEB_ORIGIN="https://<web-app-name>.fly.dev" \
   ICECAST_SOURCE_PASSWORD="<source-password>" \
+  R2_ACCOUNT_ID="<account-id>" \
+  R2_ACCESS_KEY_ID="<access-key>" \
+  R2_SECRET_ACCESS_KEY="<secret-key>" \
+  R2_BUCKET="<bucket-name>" \
+  R2_PUBLIC_URL="https://pub-example.r2.dev" \
   --app <api-app-name>
 ```
 
-The API config also sets `BROADCAST_HOST` for source clients. Make sure it points at the API app hostname.
+The API config sets `BROADCAST_HOST` for source clients. Make sure it points at the API app hostname.
 
-## 6. Deploy the API
+## 7. Deploy the API
 
 Deploy from the repository root so Docker can copy the workspace packages and Liquidsoap script:
 
 ```bash
-fly deploy -c apps/api/fly.toml
+pnpm deploy:api
 ```
 
-After deploy, verify the API:
+Or manually:
 
-```txt
-https://<api-app-name>.fly.dev/api/health
+```bash
+fly deploy -c apps/api/fly.toml --local-only --depot=false
 ```
 
-## 7. Add fallback audio
+Use `--local-only --depot=false` if your Fly org does not have Depot builder access.
+
+## 8. Run database migrations
+
+After the first API deploy, run migrations against production Postgres:
+
+```bash
+DATABASE_URL="<postgres-url>" pnpm db:migrate
+```
+
+## 9. Add fallback audio
 
 Liquidsoap needs fallback audio when nothing is scheduled.
 
@@ -96,20 +120,19 @@ Place a file at:
 /media/fallback/v1-tone.mp3
 ```
 
-You can use `fly ssh console --app <api-app-name>` to inspect the mounted volume.
+Use `fly ssh console --app <api-app-name>` to upload or copy the file onto the mounted volume.
 
-## 8. Deploy the web app
+## 10. Deploy the web app
 
-Create and deploy the web app:
+Update `apps/web/nginx.conf` if your API hostname differs from `rdio-api.fly.dev`, then deploy:
 
 ```bash
-fly apps create <web-app-name>
-fly deploy -c apps/web/fly.toml
+pnpm deploy:web
 ```
 
-The web app expects API traffic at same-origin `/api`. Its nginx container should proxy that path to the API app.
+The web app expects API traffic at same-origin `/api`. Its nginx container proxies `/api` and `/live.mp3` to the API app.
 
-## 9. Finish setup
+## 11. Finish setup
 
 Open the web app:
 
@@ -117,14 +140,33 @@ Open the web app:
 https://<web-app-name>.fly.dev
 ```
 
-The first browser to complete setup creates the station administrator. After setup, use the Members view to create additional accounts.
+The first browser to complete setup creates the station administrator. See [First-time setup](/docs/first-setup).
 
-## 10. Verify the stream
+## 12. Verify the deployment
 
-Check the public stream proxy:
+Check these endpoints:
 
-```txt
-https://<api-app-name>.fly.dev/live.mp3
-```
+| Check | URL |
+| --- | --- |
+| API health | `https://<api-app-name>.fly.dev/api/health` |
+| Stream | `https://<api-app-name>.fly.dev/live.mp3` |
+| Broadcast status | `https://<api-app-name>.fly.dev/api/broadcast/status` |
 
-Then confirm the web admin shows the same stream URL in station responses.
+Confirm the web admin **Settings** page shows the correct stream URL.
+
+Test harbor by connecting BUTT during a live broadcast slot. See [Live broadcast](/docs/live-broadcast).
+
+## Exposed ports
+
+The API Fly config exposes:
+
+| Port | Purpose |
+| --- | --- |
+| `3001` | API (internal; public via Fly HTTP) |
+| `8001` | Icecast |
+| `8005` | Harbor plain (BUTT) |
+| `8443` | Harbor TLS (BUTT with SSL) |
+
+## Troubleshooting
+
+If deploy or broadcast fails, see [Troubleshooting](/docs/troubleshooting).
