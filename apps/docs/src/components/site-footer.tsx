@@ -12,7 +12,7 @@ export function SiteFooter({ className = "" }: { className?: string }) {
         </div>
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <p className="text-[0.85rem] text-fd-muted-foreground">
-            &copy; 2026 Moonlight Studios.
+            &copy; 2026 Moonlight.
           </p>
           <nav
             aria-label="Footer"

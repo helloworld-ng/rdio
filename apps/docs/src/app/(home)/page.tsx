@@ -10,9 +10,9 @@ const pageContainerClassName =
 const meshSectionClassName =
   "relative bg-transparent before:pointer-events-none before:absolute before:inset-0 before:z-0 before:[background-image:linear-gradient(var(--color-fd-border)_1px,transparent_1px),linear-gradient(90deg,var(--color-fd-border)_1px,transparent_1px)] before:[background-size:72px_72px] before:opacity-35 dark:before:opacity-30";
 const primaryButtonClassName =
-  "rdio-primary-button inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full border px-6 py-2.5 font-semibold text-sm transition-transform duration-150 hover:-translate-y-px";
+  "rdio-primary-button inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full border px-6 py-2.5 font-semibold text-sm transition-transform duration-150";
 const secondaryButtonClassName =
-  "inline-flex w-fit items-center justify-center gap-2 whitespace-nowrap rounded-full border border-fd-border bg-fd-accent/40 px-6 py-2.5 font-semibold text-[0.85rem] text-fd-foreground transition-all duration-150 hover:-translate-y-px hover:border-rdio-primary/60 hover:bg-fd-accent";
+  "inline-flex w-fit items-center justify-center gap-2 whitespace-nowrap rounded-full border border-fd-border bg-fd-accent/40 px-6 py-2.5 font-semibold text-[0.85rem] text-fd-foreground transition-all duration-150 hover:border-rdio-primary/60 hover:bg-fd-accent";
 
 const features = [
   {
