@@ -1,5 +1,5 @@
 ---
-title: Deployment
+title: Overview
 description: Understand the pieces rdio needs before choosing a hosting platform.
 ---
 
@@ -10,6 +10,8 @@ rdio is easiest to deploy when you treat it as three concerns:
 - persistent radio data and audio services
 
 The current production model bundles the API, Liquidsoap, and Icecast in one API container. The web app is deployed separately and talks to the API through `/api`.
+
+rdio is not tied to a single hosting provider. The repository includes a Fly.io guide because that is the first maintained deployment path, but any platform can work if it can run the required services and expose the right ports.
 
 ## What must persist
 
@@ -61,6 +63,31 @@ For the web app, keep `VITE_API_BASE_URL=/api` when the web server proxies same-
 
 Update `apps/web/nginx.conf` to point at your API hostname if it differs from the default.
 
+## Hosting options
+
+Choose hosting based on the parts you need to run.
+
+### API and radio services
+
+The API container also runs Liquidsoap and Icecast. Host it somewhere that can:
+
+- run the API Dockerfile or an equivalent container image
+- attach persistent storage at `/media`
+- connect to Postgres
+- expose public HTTP for `/api` and `/live.mp3`
+- expose harbor ports for live source clients, especially 8005 and optionally 8443
+- store API secrets securely
+
+Examples include [Fly.io](https://fly.io/), [Render](https://render.com/), [Railway](https://railway.com/), [DigitalOcean App Platform](https://www.digitalocean.com/products/app-platform), [AWS ECS](https://aws.amazon.com/ecs/), or a VPS that runs Docker.
+
+### Web admin
+
+The web app can be deployed with the API or hosted separately. It only needs to serve the built frontend and reach the API. Static or container-friendly hosts such as [Vercel](https://vercel.com/), [Netlify](https://www.netlify.com/), [Cloudflare Pages](https://pages.cloudflare.com/), [Fly.io](https://fly.io/), [Render](https://render.com/), or a regular web server can work.
+
+### Media storage
+
+Uploaded media currently uses Cloudflare R2. Keep the [Cloudflare R2](/docs/cloudflare-r2) setup even if the API and web app run somewhere else.
+
 ## Deployment checklist
 
 Before the first public launch:
@@ -77,10 +104,11 @@ Before the first public launch:
 - verify harbor responds on port 8005
 - complete first-admin setup in the web UI
 
-## Platform guides
+## Next steps
 
-Start with the Fly.io guide for the current repository configuration:
+Use the maintained Fly.io guide if you want to follow the repository's existing deployment config:
 
 - [Fly.io](/docs/fly-io)
+- [Other Platforms](/docs/other-platforms)
 
 If something fails after deploy, see [Troubleshooting](/docs/troubleshooting).

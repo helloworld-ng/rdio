@@ -12,11 +12,13 @@
     "programs-and-hosts",
     "members-and-roles",
     "monitoring-the-stream",
-    "---Deploy---",
+    "---Deployment---",
     "deployment",
     "environment-variables",
     "cloudflare-r2",
+    "troubleshooting",
+    "---Platform Guides---",
     "fly-io",
-    "troubleshooting"
+    "other-platforms"
   ]
 }

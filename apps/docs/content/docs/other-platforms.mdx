@@ -1,0 +1,48 @@
+---
+title: Other Platforms
+description: Notes for deploying rdio outside the maintained Fly.io guide.
+---
+
+rdio can run on platforms beyond Fly.io. The main requirement is whether the platform can run the API and radio services reliably.
+
+## What the platform must support
+
+For the API and radio services, choose a host that can:
+
+- run the API Dockerfile or an equivalent container image
+- attach persistent storage at `/media`
+- connect to Postgres
+- expose public HTTP for `/api` and `/live.mp3`
+- expose live broadcast harbor ports, especially 8005 and optionally 8443
+- store production secrets securely
+
+The web admin is more flexible. It can run alongside the API, or it can be deployed separately to a frontend host as long as it can reach the API.
+
+## Plausible targets
+
+These platforms may be good fits, depending on how you want to operate rdio:
+
+- [Render](https://render.com/)
+- [Railway](https://railway.com/)
+- [DigitalOcean App Platform](https://www.digitalocean.com/products/app-platform)
+- [AWS ECS](https://aws.amazon.com/ecs/)
+- [Google Cloud Run](https://cloud.google.com/run)
+- a VPS running Docker
+
+Frontend-only hosts such as [Vercel](https://vercel.com/), [Netlify](https://www.netlify.com/), and [Cloudflare Pages](https://pages.cloudflare.com/) can host the web admin when the API is deployed somewhere else.
+
+## Contributing a guide
+
+If you deploy rdio on another platform, a tested guide would be welcome.
+
+A good platform guide should include:
+
+- required services and secrets
+- how to provision Postgres
+- how to mount or configure persistent `/media` storage
+- how to expose `/api`, `/live.mp3`, and live broadcast ports
+- how to configure Cloudflare R2
+- how to run migrations
+- verification steps after deploy
+
+Open a pull request with the new guide under the Platform Guides section.
