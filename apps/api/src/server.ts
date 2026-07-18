@@ -51,4 +51,4 @@ setInterval(() => {
   refreshCurrentPlayout().catch((error: unknown) => {
     server.log.error(error);
   });
-}, 15_000);
+}, 1000);

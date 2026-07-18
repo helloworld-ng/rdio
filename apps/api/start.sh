@@ -67,6 +67,8 @@ EOF
 
 icecast2 -c /etc/icecast2/icecast.xml &
 mkdir -p /media/schedule /media/uploads /media/fallback /media/cache
+# Keep API cache writes on the same volume Liquidsoap reads.
+export MEDIA_CACHE_DIR="/media/cache"
 if [ ! -f /media/schedule/playout-state.tsv ]; then
   printf '0\tfallback\t/media/fallback/v1-tone.mp3\n' > /media/schedule/playout-state.tsv
 fi

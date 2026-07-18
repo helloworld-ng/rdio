@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
+import { invalidateMediaCache } from "../lib/media-cache.js";
 import {
   createPresignedMediaUpload,
   deleteMediaObject,
@@ -85,6 +86,7 @@ export function mediaRoutes(server: FastifyInstance) {
     );
 
     await deleteMediaObject(safeMediaId);
+    await invalidateMediaCache(safeMediaId);
     await commitScheduleBlocks(updatedBlocks, "media-delete");
     return { blocks: updatedBlocks, version: await scheduleVersion() };
   });

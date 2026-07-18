@@ -4,16 +4,19 @@ settings.init.allow_root.set(true)
 
 fallback_file = "/media/fallback/v1-tone.mp3"
 # Loop the fallback tone — single() plays once then stalls, causing dropouts.
+# Force stereo so mono tone and stereo recordings share one content type.
 def fallback_request() =
   request.create(fallback_file)
 end
 
 default =
   if file.exists(fallback_file) then
-    request.dynamic(
-      id = "fallback",
-      retry_delay = 0.5,
-      fallback_request
+    audio_to_stereo(
+      request.dynamic(
+        id = "fallback",
+        retry_delay = 0.5,
+        fallback_request
+      )
     )
   else
     blank()
@@ -97,21 +100,27 @@ def is_recording_mode() =
 end
 
 def get_scheduled_request() =
+  # Always re-read playout-state so schedule edits take effect immediately.
   request.create(resolve_metadata=false, read_playout_target())
 end
 
+# prefetch=1 keeps looping smooth. On schedule change we skip twice below to
+# discard the prefetched (stale) URI. Do NOT use prefetch=0 with switch():
+# an unready request.dynamic loses to the next branch and the tone loops forever.
 scheduled = request.dynamic(
   id = "rdio-schedule",
-  retry_delay = 0.5,
+  prefetch = 1,
+  retry_delay = 0.1,
+  timeout = 30.,
   get_scheduled_request
 )
 
-# Only wire request.dynamic while mode=recording. The old fallback([scheduled,
-# default]) kept scheduled in the graph after delete wrote mode=fallback, so
-# skip() could not reliably stop the cached file.
-recorded = switch(track_sensitive=false, [
-  ({is_recording_mode()}, scheduled),
-  ({true}, default)
+# Prefer the scheduled file; hold the tone only while the request resolves.
+# Using switch([recording, default]) dropped recordings whenever scheduled was
+# briefly unavailable and then stayed on the tone for the whole track.
+recording_audio = fallback(track_sensitive=false, [
+  audio_to_stereo(scheduled),
+  default
 ])
 
 # When the live encoder hiccups, hold the fallback tone instead of silence.
@@ -119,7 +128,8 @@ live_or_fallback = fallback(track_sensitive = false, [live, default])
 
 rdio = switch(track_sensitive=false, [
   ({is_broadcast_mode()}, live_or_fallback),
-  ({true}, recorded)
+  ({is_recording_mode()}, recording_audio),
+  ({true}, default)
 ])
 rdio = mksafe(rdio)
 
@@ -132,15 +142,21 @@ def log_playout(message) =
   log(level=3, label="playout", message)
 end
 
+# Flush the prefetched request so the next URI is the current playout target.
+def flush_scheduled_prefetch() =
+  scheduled.skip()
+  thread.run(delay=0.05, fun () -> scheduled.skip())
+end
+
 def refresh_playout(prev_mode) =
   state = read_playout_state()
 
-  if state.mode == "recording" or prev_mode == "recording" then
-    recorded.skip()
-  end
-
-  # Never skip the live graph during a stable broadcast — that drops Icecast.
-  if not (state.mode == "broadcast" and prev_mode == "broadcast") then
+  # Stable live broadcast: never interrupt Icecast.
+  if state.mode == "broadcast" and prev_mode == "broadcast" then
+    ()
+  elsif state.mode == "recording" or prev_mode == "recording" then
+    flush_scheduled_prefetch()
+  else
     rdio.skip()
   end
 end
@@ -148,14 +164,13 @@ end
 def on_playout_change() =
   state = read_playout_state()
   prev_mode = last_mode()
-  leaving_recording = prev_mode == "recording" and state.mode != "recording"
   mode_changed = prev_mode != state.mode
   revision_changed = state.revision != last_revision()
   target_changed = state.target != last_target()
 
   if revision_changed or mode_changed or target_changed then
     log_playout(
-      "rev=#{state.revision} mode=#{state.mode} target=#{state.target} leaving_recording=#{leaving_recording} prev_rev=#{last_revision()} prev_mode=#{prev_mode}"
+      "rev=#{state.revision} mode=#{state.mode} target=#{state.target} prev_rev=#{last_revision()} prev_mode=#{prev_mode}"
     )
     last_revision := state.revision
     last_mode := state.mode

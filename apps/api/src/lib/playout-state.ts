@@ -65,6 +65,7 @@ export async function readPlayoutState(): Promise<PlayoutState | null> {
 export async function writePlayoutState(
   input: {
     blockId?: string;
+    force?: boolean;
     mediaId?: string;
     mode: PlayoutMode;
     target: string;
@@ -85,7 +86,13 @@ export async function writePlayoutState(
   // Only compare fields persisted in playout-state.tsv (mode + target).
   // blockId/mediaId are log metadata; comparing them caused a spurious revision
   // bump on every interval poll while a recording was playing.
-  if (current && current.mode === next.mode && current.target === next.target) {
+  // force=true bumps revision anyway so Liquidsoap re-cues after a schedule save.
+  if (
+    !input.force &&
+    current &&
+    current.mode === next.mode &&
+    current.target === next.target
+  ) {
     await logPlayoutEvent("playout_write_skipped", {
       source: context.source,
       revision: current.revision,

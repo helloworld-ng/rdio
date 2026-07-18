@@ -55,10 +55,15 @@ function findMediaIdForFile(
     return null;
   }
 
-  const match = mediaItems.find(
+  const matches = mediaItems.filter(
     (item) => item.name === file.name && item.size === file.size
   );
-  return match?.id ?? null;
+
+  if (matches.length === 1) {
+    return matches[0]?.id ?? null;
+  }
+
+  return null;
 }
 
 function slotPanelTitle(editingBlock?: ScheduleBlock) {

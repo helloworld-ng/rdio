@@ -433,6 +433,9 @@ async function applyCurrentPlayout(
 ) {
   const station = defaultStation();
   const { dateKey, minutes } = stationClock(station);
+  // Schedule edits must always bump Liquidsoap's revision so a recording
+  // re-cues even when the resolved cache path is unchanged.
+  const forceCue = source === "schedule-save" || source.startsWith("media-");
 
   await mkdir(scheduleDirectory, { recursive: true });
 
@@ -446,10 +449,16 @@ async function applyCurrentPlayout(
       mode: "broadcast",
       blockId: broadcastBlock.id,
       todayBlockCount: todayBlocks.length,
+      forceCue,
     });
     await writeFile(broadcastActiveFile, "1\n");
     await writePlayoutState(
-      { mode: "broadcast", target: "broadcast", blockId: broadcastBlock.id },
+      {
+        mode: "broadcast",
+        target: "broadcast",
+        blockId: broadcastBlock.id,
+        force: forceCue,
+      },
       { source }
     );
     return;
@@ -470,6 +479,7 @@ async function applyCurrentPlayout(
       mediaId,
       cachePath,
       todayBlockCount: todayBlocks.length,
+      forceCue,
     });
     await writePlayoutState(
       {
@@ -477,6 +487,7 @@ async function applyCurrentPlayout(
         target: cachePath,
         mediaId,
         blockId: block?.id,
+        force: forceCue,
       },
       { source }
     );
@@ -491,6 +502,7 @@ async function applyCurrentPlayout(
     minutes,
     mode: "fallback",
     todayBlockCount: todayBlocks.length,
+    forceCue,
     recordingBlocks: todayBlocks
       .filter((entry) => entry.kind === "recording")
       .map((entry) => ({
@@ -500,7 +512,7 @@ async function applyCurrentPlayout(
       })),
   });
   await writePlayoutState(
-    { mode: "fallback", target: fallbackPlayoutPath },
+    { mode: "fallback", target: fallbackPlayoutPath, force: forceCue },
     { source }
   );
   await rm(broadcastActiveFile, { force: true });
